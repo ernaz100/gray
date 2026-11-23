@@ -1,264 +1,533 @@
-<!doctype html>
-<html lang="en">
-<head>
+<!DOCTYPE html>
+<html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gray: research progress</title>
+<title>Gray — research dashboard</title>
 <style>
 :root {
   color-scheme: light;
-  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-  --series-1: #2a78d6; --series-2: #eb6834; --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
-  --wash: #eef3fb;
+  --page:      #f9f9f7;
+  --surface:   #fcfcfb;
+  --ink:       #0b0b0b;
+  --ink-2:     #52514e;
+  --muted:     #898781;
+  --hairline:  #e1e0d9;
+  --border:    rgba(11,11,11,0.10);
+  --accent:    #2a78d6;
+  --accent-bg: rgba(42,120,214,0.09);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --series-1: #3987e5; --series-2: #d95926; --wash: #16202e;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --hairline:  #2c2c2a;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #3987e5;
+    --accent-bg: rgba(57,135,229,0.14);
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 80px; }
-header { padding: 56px 0 8px; }
-h1 { font-size: 2.3rem; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.02em; }
-h2 { font-size: 1.5rem; margin: 64px 0 8px; padding-top: 12px; border-top: 1px solid var(--grid); letter-spacing: -0.01em; }
-h3 { font-size: 1.05rem; margin: 28px 0 6px; }
-p { margin: 10px 0; max-width: 72ch; }
-ul { margin: 8px 0; padding-left: 22px; max-width: 72ch; }
-li { margin: 5px 0; }
-a { color: var(--series-1); }
-code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--wash); padding: 1px 5px; border-radius: 4px; }
-.lede { font-size: 1.15rem; color: var(--ink-2); max-width: 68ch; }
-.asof { color: var(--muted); font-size: 0.9rem; }
-nav { margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.92rem; }
-nav a { text-decoration: none; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 22px 0; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-.card h4 { margin: 0 0 4px; font-size: 0.98rem; }
-.card p { margin: 4px 0 0; font-size: 0.9rem; color: var(--ink-2); }
-.state { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
-.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 18px 0; }
-.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-.tile b { display: block; font-size: 1.5rem; line-height: 1.2; }
-.tile span { font-size: 0.82rem; color: var(--ink-2); }
-.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 18px 0; }
-.flow div { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; }
-.flow div b { display: block; margin-bottom: 2px; }
-.flow i { align-self: center; color: var(--muted); font-style: normal; }
-figure { margin: 22px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-figure img { display: block; width: 100%; height: auto; border-radius: 6px; background: #fff; }
-figure.narrow img { max-width: 620px; margin: 0 auto; }
-figcaption { font-size: 0.88rem; color: var(--ink-2); margin-top: 10px; max-width: 78ch; }
-.table-wrap { overflow-x: auto; margin: 14px 0; }
-table { border-collapse: collapse; font-size: 0.9rem; min-width: 480px; }
-th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--page); border-bottom: 1px solid var(--hairline);
+  padding: 0.9rem clamp(1rem,3vw,2.5rem) 0;
+}
+h1 { margin: 0; font-size: 1.25rem; }
+.sub { color: var(--ink-2); font-size: .88rem; margin: .15rem 0 .7rem; }
+nav { display: flex; flex-wrap: wrap; gap: .25rem; }
+nav button {
+  appearance: none; border: none; background: none; color: var(--ink-2);
+  font: inherit; font-size: .9rem; padding: .45rem .8rem; cursor: pointer;
+  border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; white-space: nowrap;
+}
+nav button:hover { background: var(--accent-bg); }
+nav button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+main { padding: 1.4rem clamp(1rem,3vw,2.5rem) 3rem; max-width: 1500px; margin: 0 auto; }
+section[hidden] { display: none; }
+h2 { font-size: 1.15rem; margin: 1.8rem 0 .6rem; }
+h2:first-child { margin-top: .2rem; }
+p, li { max-width: 75ch; }
+p.lead { font-size: 1.0rem; color: var(--ink-2); }
+a { color: var(--accent); }
+code { font-family: ui-monospace, monospace; font-size: .85em; background: var(--accent-bg); padding: .05em .35em; border-radius: 4px; }
+
+svg.diag { width: 100%; height: auto; display: block; margin: .6rem 0 1.2rem; }
+svg.diag .bx { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+svg.diag .bx.done { stroke: #2e9e56; stroke-width: 1.8; }
+svg.diag .bx.prog { stroke: var(--accent); stroke-width: 1.8; }
+svg.diag .bx.plan { stroke-dasharray: 5 4; stroke: var(--muted); }
+svg.diag .bx.ext  { stroke: #a06bd6; stroke-width: 1.8; }
+svg.diag text { fill: var(--ink); font: 600 13.5px system-ui, sans-serif; }
+svg.diag text.d { fill: var(--ink-2); font: 12px system-ui, sans-serif; }
+svg.diag text.io { fill: var(--ink-2); font: 11.5px ui-monospace, monospace; }
+svg.diag text.lab { fill: var(--muted); font: 11px system-ui, sans-serif; }
+svg.diag line.arrow, svg.diag path.arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .8rem; color: var(--ink-2); margin: -.4rem 0 1rem; }
+.legend span::before { content: ""; display: inline-block; width: 22px; height: 3px; margin: 0 .4rem 3px 0; vertical-align: middle; border-radius: 2px; }
+.legend .l-done::before { background: #2e9e56; }
+.legend .l-prog::before { background: var(--accent); }
+.legend .l-plan::before { background: repeating-linear-gradient(90deg, var(--muted) 0 5px, transparent 5px 9px); }
+.legend .l-ext::before  { background: #a06bd6; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: .8rem; margin: 1rem 0 1.4rem; }
+.tile {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: .8rem .95rem;
+}
+.tile .label { font-size: .8rem; color: var(--ink-2); }
+.tile .value { font-size: 1.9rem; font-weight: 600; line-height: 1.15; margin: .1rem 0; }
+.tile .note  { font-size: .78rem; color: var(--muted); }
+
+.pipe { display: flex; gap: .5rem; overflow-x: auto; padding: .3rem 0 .8rem; }
+.stage {
+  flex: 1 0 200px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: .65rem .8rem; position: relative;
+}
+.stage + .stage::before {
+  content: "→"; position: absolute; left: -0.72rem; top: 42%; color: var(--muted); font-size: 1rem;
+}
+.stage .t { font-weight: 600; font-size: .9rem; }
+.stage .d { font-size: .78rem; color: var(--ink-2); margin-top: .15rem; }
+.stage .s { font-size: .78rem; margin-top: .3rem; color: var(--ink-2); }
+.stage .s b { color: var(--ink); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 1rem; margin: .8rem 0 1.4rem; }
+.grid.narrow { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .8rem 0 1.4rem; }
+@media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.card video { width: 100%; height: auto; display: block; background: #000; }
+.card img   { width: 100%; height: auto; display: block; }
+.card .cap  { padding: .6rem .85rem .75rem; }
+.card .cap .h { font-weight: 600; font-size: .9rem; }
+.card .cap .p { font-size: .84rem; color: var(--ink-2); margin-top: .15rem; }
+.card .cap .f { font-family: ui-monospace, monospace; font-size: .7rem; color: var(--muted); margin-top: .35rem; word-break: break-all; }
+
+.callout {
+  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: .7rem 1rem; margin: 1rem 0; max-width: 85ch;
+}
+.callout .h { font-weight: 600; font-size: .92rem; margin-bottom: .2rem; }
+.callout p, .callout ul { margin: .3rem 0; font-size: .9rem; }
+
+table { border-collapse: collapse; margin: .8rem 0 1.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+th, td { padding: .45rem .8rem; text-align: left; font-size: .88rem; border-bottom: 1px solid var(--hairline); }
 th { color: var(--ink-2); font-weight: 600; }
-td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
-.chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 20px 0; position: relative; }
-.chart h4 { margin: 0 0 2px; font-size: 1rem; }
-.chart .sub { font-size: 0.85rem; color: var(--ink-2); margin: 0 0 12px; }
-.row { display: grid; grid-template-columns: minmax(120px, 260px) 1fr; gap: 10px; align-items: center; padding: 3px 0; border-radius: 6px; }
-.row:hover { background: var(--wash); }
-.row .name { font-size: 0.86rem; color: var(--ink-2); text-align: right; }
+tr:last-child td { border-bottom: none; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.small { font-size: .8rem; color: var(--muted); }
+ul.tight { margin: .4rem 0; padding-left: 1.2rem; }
+ul.tight li { margin: .25rem 0; }
+
+:root { --series-1: #2a78d6; --series-2: #eb6834; --axis: #c3c2b7; }
+@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --series-2: #d95926; --axis: #383835; } }
+.card img { background: #fff; }
+.chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; margin: 1rem 0 1.4rem; max-width: 1000px; }
+.chart h4 { margin: 0 0 .1rem; font-size: .98rem; }
+.chart .csub { font-size: .84rem; color: var(--ink-2); margin: 0 0 .7rem; }
+.clegend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .82rem; color: var(--ink-2); margin: 0 0 .6rem; }
+.clegend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--series-1); }
+.clegend span.s2::before { background: var(--series-2); }
+.clegend span.r::before { width: 0; height: 12px; border-left: 2px solid var(--ink-2); border-radius: 0; background: none; vertical-align: -2px; }
+.row { display: grid; grid-template-columns: minmax(120px, 300px) 1fr; gap: 10px; align-items: center; padding: 3px 0; border-radius: 6px; }
+.row:hover { background: var(--accent-bg); }
+.row .name { font-size: .84rem; color: var(--ink-2); text-align: right; }
 .track { position: relative; height: 22px; border-left: 1px solid var(--axis); }
 .bar { position: absolute; left: 0; top: 2px; height: 18px; border-radius: 0 4px 4px 0; background: var(--series-1); min-width: 2px; }
 .bar.s2 { background: var(--series-2); }
-.val { position: absolute; top: 0; line-height: 22px; font-size: 0.82rem; color: var(--ink); padding-left: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pair .track { height: 40px; }
-.pair .bar { height: 16px; } .pair .bar.s2 { top: 20px; }
-.pair .val { line-height: 20px; } .pair .val.v2 { top: 20px; }
+.val { position: absolute; top: 0; line-height: 22px; font-size: .8rem; color: var(--ink); padding-left: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row.pair { display: grid; grid-template-columns: minmax(120px, 300px) 1fr; margin: 0; }
+.row.pair .track { height: 40px; }
+.row.pair .bar { height: 16px; } .row.pair .bar.s2 { top: 20px; }
+.row.pair .val { line-height: 20px; } .row.pair .val.v2 { top: 20px; }
 .ref { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 2px solid var(--ink-2); }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.84rem; color: var(--ink-2); margin: 0 0 10px; }
-.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--series-1); }
-.legend span.s2::before { background: var(--series-2); }
-.legend span.r::before { width: 0; height: 12px; border-left: 2px solid var(--ink-2); border-radius: 0; background: none; vertical-align: -2px; }
-.tip { position: fixed; z-index: 5; pointer-events: none; background: var(--ink); color: var(--page); font-size: 0.8rem; padding: 5px 8px; border-radius: 6px; max-width: 280px; display: none; }
-.note { background: var(--wash); border-radius: 10px; padding: 12px 16px; font-size: 0.93rem; max-width: 76ch; }
-.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
-.two figure { margin: 0; }
-footer { margin-top: 64px; color: var(--muted); font-size: 0.85rem; }
-@media (max-width: 560px) { .row { grid-template-columns: 110px 1fr; } h1 { font-size: 1.8rem; } }
-</style>
-</head>
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--page); font-size: .8rem; padding: 5px 8px; border-radius: 6px; max-width: 280px; display: none; }
+</style></head>
 <body>
-<div class="wrap">
 
 <header>
-  <div class="asof">Research progress, as of 23 November 2026</div>
   <h1>Gray</h1>
-  <p class="lede">A system that takes what a head camera sees and a text prompt, generates motion that works in the scene, and notices when the world differs from what it expected. The aim is a closed loop that can be put into a scene and prompted around.</p>
-  <p>The name is after Jeffrey Gray's comparator: predict what the senses will report next, compare it with what they report, and interrupt the running plan on a mismatch.</p>
-  <nav>
-    <a href="#state">Where it stands</a><a href="#data">Data</a><a href="#judging">Judging paths</a><a href="#head">Head path</a>
-    <a href="#room">Reading the room</a><a href="#comparator">Comparator</a><a href="#body">Body</a><a href="#failed">What did not work</a><a href="#next">Next</a>
-  </nav>
+  <div class="sub">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 23 November 2026.</div>
+  <nav id="tabs"></nav>
 </header>
+<main id="panels">
 
-<h2 id="state">Where it stands</h2>
-<div class="flow">
-  <div><b>Camera image and text</b>what a robot has: the image, the prompt, its own pose</div><i>→</i>
-  <div><b>1. Head path</b>where the head goes in the next 5 s</div><i>→</i>
-  <div><b>2. Comparator</b>what the camera should show along that path, compared with what it shows</div><i>→</i>
-  <div><b>3. Body</b>the body motion that carries the head along the path</div>
-</div>
-<div class="cards">
-  <div class="card"><div class="state"><span class="dot" style="background:var(--good)"></span>Usable</div><h4>1. Head path</h4>
-    <p>Follows the prompt and reaches named objects in about 60 % of draws. In the first two seconds it goes through obstacles as rarely as recorded paths do.</p></div>
-  <div class="card"><div class="state"><span class="dot" style="background:var(--warning)"></span>Works, too many false alarms</div><h4>2. Comparator</h4>
-    <p>Catches a different scene in 91 % of cases one second ahead, but also alarms in 13 to 16 % of cases when nothing changed. A retraining aimed at that is queued.</p></div>
-  <div class="card"><div class="state"><span class="dot" style="background:var(--series-1)"></span>In training</div><h4>3. Body</h4>
-    <p>The body of every recording was encoded again as one track. The first model is training; no final numbers yet.</p></div>
-  <div class="card"><div class="state"><span class="dot" style="background:var(--muted)"></span>Not started</div><h4>The loop</h4>
-    <p>Plan, move, compare, replan. Also missing: any test in a scene that really changes.</p></div>
-</div>
-<p><b>Rules the project keeps to.</b> The model gets only what a robot would have: camera image, text, its own pose. No gaze, no known map of the scene. Maps and other truths are used to train and to score, never as input. The work is on indoor navigation.</p>
+<section data-tab="Overview" id="overview">
+  <p class="lead">A system that takes what a head camera sees and a text prompt, generates motion that works in the scene, and <b>notices when the world differs from what it expected</b>. The aim is a closed loop that can be put into a scene and prompted around. The name is after Jeffrey Gray's comparator: predict what the senses will report next, compare, and interrupt the running plan on a mismatch.</p>
 
-<h2 id="data">Data</h2>
-<p>The source is <b>Nymeria</b>: people wearing camera glasses and a motion-capture suit in real homes, with a narration that describes each recording in pieces of about 5 seconds.</p>
-<div class="tiles">
-  <div class="tile"><b>1,074</b><span>recordings</span></div>
-  <div class="tile"><b>17.7 M</b><span>frames at 15 per second</span></div>
-  <div class="tile"><b>167,796</b><span>moments (one per narrated sentence)</span></div>
-  <div class="tile"><b>44,754</b><span>moments in the navigation subset</span></div>
-  <div class="tile"><b>39 + 5</b><span>homes for training, and held out</span></div>
-</div>
-<h3>From fisheye to a normal camera</h3>
-<p>The glasses record a fisheye image. A robot camera does not, so every frame is cut to a pinhole view of 79.6 degrees before any feature is computed. The image features are DINOv3 (ViT-S/16): one vector per frame, and a 7 x 7 grid of vectors per frame.</p>
-<figure><img src="img/pinhole.jpg" alt="Fisheye frames next to pinhole views cut from them" loading="lazy">
-<figcaption>Left: the recorded fisheye frame, with the outline of the view that is cut out. Middle and right: pinhole views cut from it. This picture is from the first check and shows a 69 degree view; the project settled on 79.6 degrees looking straight along the camera axis.</figcaption></figure>
-<h3>Moments</h3>
-<p>A training sample is a <b>moment</b>: "now" is where a narration sentence begins. The model is given the 2 seconds before now and predicts the 5 seconds the sentence describes. The navigation subset keeps indoor moments that are mostly walking, and drops standing around and outdoor walks. Five homes are held out entirely; every score below is from those.</p>
+  <div class="tiles">
+    <div class="tile"><div class="label">Head paths that go through something</div><div class="value">17.5 %</div><div class="note">over 5 s; recorded paths 7.3 %; first run 40.8 %</div></div>
+    <div class="tile"><div class="label">The same over the first 2 s</div><div class="value">3.1 %</div><div class="note">recorded paths 2.9 %: what a replanning system executes</div></div>
+    <div class="tile"><div class="label">Named object reached</div><div class="value">61 %</div><div class="note">25 % with the wrong sentence</div></div>
+    <div class="tile"><div class="label">Different scene caught, 1 s ahead</div><div class="value">91 %</div><div class="note">comparator on the image grid</div></div>
+    <div class="tile"><div class="label">False alarms, nothing changed</div><div class="value">13–16 %</div><div class="note">should be near 5 %; retraining queued</div></div>
+  </div>
 
-<h2 id="judging">Judging a path without the recorded one</h2>
-<p>Many paths are valid for one sentence, so distance to the recorded path is a poor score. Paths are judged on three things: whether the head <b>goes when the text says so</b>, whether it <b>ends near an object the sentence names</b>, and whether it <b>goes through something</b>.</p>
-<p>The last needs a map of each home. That took several rounds.</p>
-<div class="two">
-<figure><img src="img/atlas-loc08.jpg" alt="One home from above with all recorded head paths" loading="lazy">
-<figcaption>One home (Loc_08), from Nymeria's annotated boxes: walls black, furniture boxes tan, stairs blue, all recorded head paths as blue lines. 26 recordings, 4.9 km of path.</figcaption></figure>
-<figure><img src="img/crossings.jpg" alt="Recorded paths crossing annotated walls at doors" loading="lazy">
-<figcaption>Recorded paths seemed to cross walls. Looking at the video showed these were doors, annotated as wall. Doorways (green) are now cut open.</figcaption></figure>
-</div>
-<p>The annotated furniture boxes turned out to be in the right place but too rough: they include space people walk through. The truth used now does not rest on them.</p>
-<figure class="narrow"><img src="img/ground-loc08.jpg" alt="Free and blocked space of one home" loading="lazy">
-<figcaption>The truth used for scoring, for the same home. <b>Green (free):</b> where somebody walked upright in any recording. <b>Black and red (blocked):</b> walls, and cells where the glasses measured points in at least 30 % of the recordings. <b>White:</b> unknown. Blue outlines are the furniture boxes of one recording, for comparison.</figcaption></figure>
+  <h2>Pipeline stages</h2>
+  <div class="pipe">
+    <div class="stage"><div class="t">1 · Head path</div><div class="d">image + text → where the head goes in the next 5 s</div><div class="s"><b>Usable:</b> head-v5, sampled in 4 steps with half the starting noise</div></div>
+    <div class="stage"><div class="t">2 · Comparator</div><div class="d">head path → what the camera should show, with its uncertainty</div><div class="s"><b>Works, too many false alarms:</b> compare-v3; compare-v4 queued</div></div>
+    <div class="stage"><div class="t">3 · Body</div><div class="d">head path → the body motion that carries the head along it</div><div class="s"><b>Training:</b> motion-v1, body tracks rebuilt for all recordings</div></div>
+    <div class="stage"><div class="t">4 · The loop</div><div class="d">plan, move, compare, replan</div><div class="s"><b>Not started.</b></div></div>
+    <div class="stage"><div class="t">5 · A scene that changes</div><div class="d">a renderer or a robot</div><div class="s"><b>Not started.</b> Rendered features differ strongly from real ones</div></div>
+  </div>
 
-<h2 id="head">Part 1: the head path</h2>
-<p>A flow model that generates the head poses of the next 5 seconds from the past head poses and images, the sentence, and the image grid of the current frame. During training it also has to say how far the way is free around the camera, which makes it attend to the room; the map is never an input.</p>
-<div class="chart" id="chart-head">
-  <h4>How often a generated path goes through something</h4>
-  <p class="sub">Share of 5-second paths with a point in a blocked cell while moving. 3,000 held-out moments that go 1 m or further. Lower is better.</p>
-  <div class="legend"><span>generated paths</span><span class="r">recorded paths, 7.3 %</span></div>
-  <div class="rows"></div>
-</div>
-<ul>
-  <li><b>What helped most cost nothing.</b> Fewer sampling steps and less starting noise cut the rate from 34 % to 17.5 % without retraining. Noise spreads the draws mostly into worse paths.</li>
-  <li><b>It follows the text.</b> It goes when the sentence mentions walking in 85.5 % of cases (people: 92.0 %) and in 12.3 % when it does not (people: 15.9 %).</li>
-  <li><b>It reaches named objects</b> in about 60 % of draws, against 25 % when given the wrong sentence.</li>
-  <li><b>The first seconds are as good as recorded.</b> Over the first 2 seconds, which a replanning system executes, 3.1 % of paths go through something, against 2.9 % for recorded paths.</li>
-</ul>
-<figure><img src="img/paths-0.jpg" alt="Generated head paths on room maps, three moments" loading="lazy">
-<figcaption>Three held-out moments. Left: what the camera sees at now, with the sentence. Right: the home from above with six generated paths in colour, the recorded path dashed, and the 2 seconds before in grey. Top and middle: the paths follow the corridor and the gap between furniture. Bottom, on stairs: the paths clip a blocked area; the flat map is least reliable there.</figcaption></figure>
-<figure><img src="img/paths-2.jpg" alt="Generated head paths on room maps, three more moments" loading="lazy">
-<figcaption>Typical failures. Middle: the sentence is about picking up a key and says little about direction; the paths go straight where the person turned. Bottom: the person walks 3 m to a table; the generated paths stop after about 1 m.</figcaption></figure>
+  <h2>Rules the project keeps to</h2>
+  <div class="callout">
+    <ul class="tight">
+      <li><b>Robot inputs only.</b> The model gets what a robot would have: camera image, text, its own pose. No gaze, no known map of the scene.</li>
+      <li><b>Maps are for training and scoring,</b> never an input.</li>
+      <li><b>Indoor navigation.</b> No standing around, no outdoor walks.</li>
+      <li><b>Scores come from held-out homes</b> that no model saw in training.</li>
+    </ul>
+  </div>
 
-<h2 id="room">Reading the room from the image</h2>
-<p>The remaining weakness of the head path is that it cannot read the layout of a home it has not seen. On homes it trained on it estimates the free distance around the camera to 0.28 m; on new homes to about 0.55 m. It learns rooms, not how to read a room.</p>
-<p>A fixed test bed compares image features on this: a small probe has to say, from the features of one frame, how far the way is free along 16 directions.</p>
-<figure class="narrow"><img src="img/probe-look.jpg" alt="Frames, estimated depth, and obstacle distances seen from above" loading="lazy">
-<figcaption>Checking the test bed by eye. Left: the frame. Middle: estimated depth (Depth Anything V2). Right: seen from above with the camera at the centre, the distances from the map (black, red) and the points the depth gives (blue).</figcaption></figure>
-<ul>
-  <li>No feature tried changes the picture: finer grids, estimated depth, earlier frames.</li>
-  <li>Nothing reads obstacles within 2.5 m better than to about 0.45 to 0.5 m.</li>
-  <li>The most likely cause is the number of homes: 39 for training.</li>
-</ul>
-<h3>More homes from another dataset</h3>
-<p>Ropedia Xperience 2 has walk-throughs of other homes with a head-worn camera rig, poses and a mesh. Of 105 indoor walk-throughs online, 41 had a usable mesh.</p>
-<div class="two">
-<figure><img src="img/ropedia-map.jpg" alt="Free and blocked space from one walk-through's mesh" loading="lazy">
-<figcaption>One walk-through, from its mesh: floor green, things at body height red, the camera path blue.</figcaption></figure>
-<figure><img src="img/ropedia-look.jpg" alt="Views cut from Ropedia with their free distances" loading="lazy">
-<figcaption>Views cut to match ours, with the free distance around the camera below each (ahead is up).</figcaption></figure>
-</div>
-<div class="table-wrap"><table>
-<tr><th>Probe trained on</th><th class="n">Held-out Nymeria homes</th><th class="n">of that, under 1 m</th><th class="n">Held-out Ropedia scenes</th></tr>
-<tr><td>The median distance (no image)</td><td class="n">1.16 m</td><td class="n">0.47 m</td><td class="n">0.74 m</td></tr>
-<tr><td>Nymeria, 39 homes</td><td class="n">0.82 m</td><td class="n">0.69 m</td><td class="n">0.65 m</td></tr>
-<tr><td>Ropedia, 27 scenes</td><td class="n">1.00 m</td><td class="n">0.60 m</td><td class="n">0.51 m</td></tr>
-<tr><td>Both</td><td class="n">0.81 m</td><td class="n">0.64 m</td><td class="n">0.52 m</td></tr>
-</table></div>
-<p class="note"><b>Not conclusive.</b> Adding the Ropedia scenes does not improve reading held-out Nymeria homes (0.81 m against 0.82 m), and the two datasets transfer poorly to each other. 27 scenes from another camera rig, with a truth made differently, are too few and too different to show whether hundreds of homes would help. Worth repeating when the rest of that dataset is published.</p>
+  <h2>Where things are</h2>
+  <ul class="tight">
+    <li><a href="../README.md"><code>README.md</code></a>: which script does what, and where its output is.</li>
+    <li><a href="../STATUS.md"><code>STATUS.md</code></a>: the short written summary.</li>
+    <li><a href="../DESIGN.md"><code>DESIGN.md</code></a>: every experiment with its reasoning and numbers, in the order they happened.</li>
+  </ul>
+</section>
 
-<h2 id="comparator">Part 2: the comparator</h2>
-<p>Given the past, the sentence, and the head poses of the next 5 seconds, the comparator predicts what the camera will show at each of those frames, and how uncertain that prediction is. The signal is the <b>surprise</b>: the error divided by the predicted uncertainty. It should be about 1 while the world is as expected, whatever the head does.</p>
-<ul>
-  <li><b>It predicts.</b> On unseen homes its error is 0.53, against 1.07 to 1.16 for assuming the image stays as it is.</li>
-  <li><b>It is calibrated.</b> The surprise is 1.08 to 1.10 on true frames.</li>
-  <li><b>Turning is explained away.</b> The raw error rises from 0.34 to 0.75 with turning; the surprise stays at 1.1.</li>
-</ul>
-<h3>Does it notice a changed world?</h3>
-<p>Recordings contain no unexpected changes, so the comparator is handed another frame in place of the true one, taken from nearly the same camera pose. The threshold is set so that 5 % of true frames raise an alarm.</p>
-<div class="chart" id="chart-alarm">
-  <h4>Alarm rate one second ahead, by what the camera is shown</h4>
-  <p class="sub">3,000 held-out moments. The first row should be near 5 %, the last high.</p>
-  <div class="legend"><span>compare-v2: predicts one vector per frame</span><span class="s2">compare-v3: predicts the 7 x 7 image grid</span></div>
-  <div class="rows"></div>
-</div>
-<ul>
-  <li><b>The order is right,</b> and predicting the image grid catches a different scene more often: 91 % against 79 %.</li>
-  <li><b>Too many false alarms when nothing changed:</b> 16 %, or 13 % when only the part of the image on the path is compared. Averaging over five frames does not help.</li>
-  <li><b>They belong to the first second,</b> where the model is most sure, and two views of an unchanged place differ by more than it allows for: hands, people, objects being handled. Two seconds ahead the rate is 9 %, four seconds ahead 6 %.</li>
-</ul>
-<p class="note"><b>Queued:</b> <code>compare-v4</code> is trained with such revisits as targets (48 % of all frames have one), so that its own uncertainty learns how much an unchanged place varies. After it: a test in one home where it is known which furniture stood where in each recording, to see whether a moved piece is noticed.</p>
+<section data-tab="Method" id="method" hidden>
+  <p class="lead">The method in one sentence: <b>generate the head path first, predict what the camera will show along it, and let the body follow the head</b>. Each part is a separate model, trained and tested on its own before they are connected.</p>
 
-<h2 id="body">Part 3: the body</h2>
-<p>The body model gets the head path of the next 5 seconds and generates the body along it: a pose encoding per frame plus the pelvis path and facing direction. It is also given the past body, which a robot knows; in 30 % of training samples that is withheld, for the very start of a deployment.</p>
-<ul>
-  <li><b>Data prepared.</b> The body existed only per 8-second window, each with its own floor height. It was encoded again from the motion capture as one continuous track per recording, for all 1,074 recordings. The new encoding agrees with the old one, and the head joint sits 14 to 15 cm from the camera throughout.</li>
-  <li><b>Training has started.</b> After 2,000 of 40,000 steps the generated pelvis is 10.4 cm from the recorded one on held-out homes, against 22.2 cm for placing it straight under the camera. These are early numbers, not results.</li>
-  <li><b>Checks prepared for when it finishes:</b> which sampling settings are best; whether the body still belongs to the path when the path comes from the head-path model; and whether it drifts when it continues from its own output one second at a time.</li>
-</ul>
+  <h2>The chain</h2>
+  <svg class="diag" viewBox="0 0 1240 250" role="img" aria-label="The chain of models">
+    <defs><marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker></defs>
+    <rect class="bx" x="20" y="85" width="150" height="80" rx="9"/>
+    <text x="95" y="112" text-anchor="middle">camera + text</text>
+    <text class="d" x="95" y="130" text-anchor="middle">past 2 s of images,</text>
+    <text class="d" x="95" y="146" text-anchor="middle">own pose, a sentence</text>
+    <line class="arrow" x1="170" y1="125" x2="228" y2="125" marker-end="url(#arrP)"/>
+    <rect class="bx done" x="230" y="75" width="225" height="100" rx="10"/>
+    <text x="342" y="103" text-anchor="middle">1 · Head path</text>
+    <text class="d" x="342" y="123" text-anchor="middle">flow model; also learns to say</text>
+    <text class="d" x="342" y="139" text-anchor="middle">how far the way is free</text>
+    <text class="lab" x="342" y="192" text-anchor="middle">gray/head.py · head-v5</text>
+    <line class="arrow" x1="455" y1="125" x2="528" y2="125" marker-end="url(#arrP)"/>
+    <text class="io" x="492" y="48" text-anchor="middle">head poses,</text>
+    <text class="io" x="492" y="64" text-anchor="middle">75 frames</text>
+    <rect class="bx prog" x="530" y="75" width="225" height="100" rx="10"/>
+    <text x="642" y="103" text-anchor="middle">2 · Comparator</text>
+    <text class="d" x="642" y="123" text-anchor="middle">expected image features along</text>
+    <text class="d" x="642" y="139" text-anchor="middle">the path, with uncertainty</text>
+    <text class="lab" x="642" y="192" text-anchor="middle">gray/compare.py · compare-v3, v4 queued</text>
+    <line class="arrow" x1="755" y1="125" x2="828" y2="125" marker-end="url(#arrP)"/>
+    <text class="io" x="792" y="48" text-anchor="middle">surprise =</text>
+    <text class="io" x="792" y="64" text-anchor="middle">error / uncertainty</text>
+    <rect class="bx prog" x="830" y="75" width="205" height="100" rx="10"/>
+    <text x="932" y="103" text-anchor="middle">3 · Body</text>
+    <text class="d" x="932" y="123" text-anchor="middle">pose encoding and root path</text>
+    <text class="d" x="932" y="139" text-anchor="middle">along the head path</text>
+    <text class="lab" x="932" y="192" text-anchor="middle">gray/motion.py · motion-v1</text>
+    <line class="arrow" x1="1035" y1="125" x2="1078" y2="125" marker-end="url(#arrP)"/>
+    <rect class="bx plan" x="1080" y="75" width="140" height="100" rx="10"/>
+    <text x="1150" y="110" text-anchor="middle">The loop</text>
+    <text class="d" x="1150" y="130" text-anchor="middle">replan on surprise</text>
+    <text class="lab" x="1150" y="192" text-anchor="middle">not started</text>
+  </svg>
+  <div class="legend"><span class="l-done">working / validated</span><span class="l-prog">in progress</span><span class="l-plan">planned</span></div>
 
-<h2 id="failed">What was tried and did not work</h2>
-<div class="table-wrap"><table>
-<tr><th>Idea</th><th>Outcome</th></tr>
-<tr><td>Text guidance when sampling head paths</td><td>No gain.</td></tr>
-<tr><td>Estimated depth as an extra input (<code>head-v6</code>)</td><td>34.1 % against 33.7 % without it.</td></tr>
-<tr><td>Explorative training, best of several noises (arXiv 2607.27372)</td><td>Worse than ordinary training.</td></tr>
-<tr><td>Earlier frames as memory for reading obstacles</td><td>No gain in the test bed.</td></tr>
-<tr><td>Annotated furniture boxes as the truth for collisions</td><td>Too rough at close range; replaced by walked and measured space.</td></tr>
-<tr><td>Judging the alarm over five frames</td><td>False alarms unchanged.</td></tr>
-<tr><td>Comparing only the part of the image on the path</td><td>False alarms 13 % against 16 %, detection falls with it.</td></tr>
-<tr><td>More homes from Ropedia Xperience 2</td><td>Not conclusive with what is published so far.</td></tr>
-</table></div>
-<p>Several explanations were also tested and refuted: that near obstacles are out of view (95 % are visible), and that the comparator's false alarms come from loose pose matching, short events, or the edges of the image.</p>
+  <h2>Models</h2>
+  <table>
+    <tr><th>Part</th><th>Given</th><th>Produces</th><th>How it is judged</th><th>Status</th></tr>
+    <tr><td><b>Head path</b></td><td>past head poses and images (2 s), the sentence, the 7 x 7 image grid at now</td><td>head poses of the next 5 s</td><td>goes when told; reaches a named object; goes through something</td><td>usable</td></tr>
+    <tr><td><b>Comparator</b></td><td>the same, plus the head poses of the next 5 s</td><td>the image features of those frames and how uncertain each is</td><td>alarm rate when shown another frame than the true one</td><td>false alarms too high</td></tr>
+    <tr><td><b>Body</b></td><td>the same, plus the past body</td><td>pose encoding, pelvis path and facing direction for 5 s</td><td>pelvis and facing against the recorded body; head joint against the camera</td><td>training</td></tr>
+  </table>
 
-<h2 id="next">Open, and next</h2>
-<ul>
-  <li><b>Comparator:</b> the result of <code>compare-v4</code>, then the moved-furniture test.</li>
-  <li><b>Body:</b> finish training, run the three checks, and look at the motion as a figure.</li>
-  <li><b>The loop:</b> planner and comparator connected, on recordings first.</li>
-  <li><b>A scene that can change.</b> Only this tests the comparator's real purpose. It needs a renderer or a robot; a rendered version of one home gives image features that differ strongly from real ones, which is unsolved.</li>
-  <li><b>Reading unseen rooms</b> stays limited, most likely by the number of homes.</li>
-  <li><b>Choosing among several drawn paths.</b> Among 8 draws one is nearly always clear (3.7 %), but picking by the model's own estimate gives about 20 %.</li>
-</ul>
+  <h2>Why a flow model that predicts the clean value</h2>
+  <p>All three are transformers over one token per frame. Head path and body are flow models: a noise level is drawn per sample, the future is mixed with noise accordingly, and the model predicts the clean future. Sampling starts from noise and takes a few steps. The comparator is not sampled: one pass gives the expected feature and its variance.</p>
 
-<h2>Where things are</h2>
-<ul>
-  <li><a href="../README.md"><code>README.md</code></a>: which script does what, and where its output is.</li>
-  <li><a href="../STATUS.md"><code>STATUS.md</code></a>: the short written summary.</li>
-  <li><a href="../DESIGN.md"><code>DESIGN.md</code></a>: every experiment with its reasoning and numbers, in the order they happened.</li>
-</ul>
+  <h2>The comparator as a tracking filter</h2>
+  <p>The comparator's signal is the same quantity a Kalman filter tests: the difference between prediction and observation, divided by how uncertain the prediction was. A large raw difference while the head turns fast is expected and should not alarm; a small one while standing still may be a real change. Dividing by the predicted uncertainty is what makes one threshold work for both.</p>
+</section>
 
-<footer>Pictures show frames and maps derived from the Nymeria dataset and from Ropedia Xperience 2 (CC BY-NC 4.0); both are for research use. Recording names are the datasets' own identifiers.</footer>
-</div>
+<section data-tab="Data" id="data" hidden>
+  <p class="lead">The source is <b>Nymeria</b>: people wearing camera glasses and a motion-capture suit in real homes, with a narration that describes each recording in pieces of about 5 seconds.</p>
+  <div class="tiles">
+    <div class="tile"><div class="label">Recordings</div><div class="value">1,074</div><div class="note">17.7 M frames at 15 per second</div></div>
+    <div class="tile"><div class="label">Moments</div><div class="value">167,796</div><div class="note">one per narrated sentence</div></div>
+    <div class="tile"><div class="label">Navigation subset</div><div class="value">44,754</div><div class="note">39,130 for training, 5,624 held out</div></div>
+    <div class="tile"><div class="label">Homes</div><div class="value">39 + 5</div><div class="note">for training, and held out entirely</div></div>
+  </div>
+
+  <h2>From fisheye to a normal camera</h2>
+  <p>The glasses record a fisheye image. A robot camera does not, so every frame is cut to a pinhole view of 79.6 degrees before any feature is computed. Image features are DINOv3 (ViT-S/16): one vector per frame, and a 7 x 7 grid of vectors per frame.</p>
+  <div class="grid">
+    <div class="card" style="grid-column: 1 / -1; max-width: 1000px;"><img src="img/pinhole.jpg" alt="Fisheye frames next to pinhole views cut from them" loading="lazy">
+      <div class="cap"><div class="h">Fisheye frame, and pinhole views cut from it</div>
+      <div class="p">Left: the recorded frame with the outline of the cut. Middle and right: pinhole views. From the first check, at 69 degrees; the project settled on 79.6 degrees along the camera axis.</div>
+      <div class="f">gray/rectify.py</div></div></div>
+  </div>
+
+  <h2>Moments</h2>
+  <p>A training sample is a <b>moment</b>: "now" is where a narration sentence begins. The model is given the 2 seconds before now and predicts the 5 seconds the sentence describes. The navigation subset keeps indoor moments that are mostly walking.</p>
+
+  <h2>What was prepared</h2>
+  <table>
+    <tr><th>What</th><th>Note</th></tr>
+    <tr><td>Pinhole view, one vector per frame</td><td>DINOv3 class token, all frames</td></tr>
+    <tr><td>Image grid 7 x 7 per frame</td><td>the patch features of the same pass, 621 GB</td></tr>
+    <tr><td>Head path of each recording</td><td>one continuous track</td></tr>
+    <tr><td>Body of each recording</td><td>one continuous track, encoded again from the motion capture</td></tr>
+    <tr><td>Room maps</td><td>walls from annotated boxes; free and blocked space from all recordings of a home</td></tr>
+    <tr><td>Revisits</td><td>for 48 % of frames, a later frame from nearly the same pose</td></tr>
+    <tr><td>Estimated depth per frame</td><td>Depth Anything V2; turned out not to help</td></tr>
+  </table>
+</section>
+
+<section data-tab="Judging paths" id="judging" hidden>
+  <p class="lead">Many paths are valid for one sentence, so <b>distance to the recorded path is a poor score</b>. Paths are judged on whether the head goes when the text says so, whether it ends near an object the sentence names, and whether it goes through something. The last needs a map of each home, which took several rounds.</p>
+
+  <h2>From annotated boxes to walked and measured space</h2>
+  <div class="grid">
+    <div class="card"><img src="img/atlas-loc08.jpg" alt="One home from above with all recorded head paths" loading="lazy">
+      <div class="cap"><div class="h">Round 1: annotated boxes</div><div class="p">One home with walls black, furniture boxes tan, stairs blue, and all recorded head paths. 26 recordings, 4.9 km of path.</div><div class="f">gray/atlas.py · Loc_08</div></div></div>
+    <div class="card"><img src="img/crossings.jpg" alt="Recorded paths crossing annotated walls at doors" loading="lazy">
+      <div class="cap"><div class="h">Paths seemed to cross walls</div><div class="p">Looking at the video showed these were doors, annotated as wall. Doorways (green) are now cut open.</div><div class="f">gray/crossings.py</div></div></div>
+    <div class="card"><img src="img/ground-loc08.jpg" alt="Free and blocked space of one home" loading="lazy">
+      <div class="cap"><div class="h">The truth used now</div><div class="p"><b>Green:</b> where somebody walked upright in any recording. <b>Black and red:</b> walls, and cells where the glasses measured points in at least 30 % of the recordings. <b>White:</b> unknown. Blue outlines: the furniture boxes, for comparison.</div><div class="f">gray/ground.py · Loc_08</div></div></div>
+  </div>
+  <div class="callout"><div class="h">Why the boxes were dropped</div>
+    <p>The annotated furniture boxes are in the right place but too rough at close range: they include space people walk through. Recorded paths, which cannot go through furniture, were scored as doing so.</p></div>
+
+  <h2>The three scores</h2>
+  <table>
+    <tr><th>Score</th><th>Definition</th><th>Recorded paths</th></tr>
+    <tr><td><b>Goes when told</b></td><td>gets 1 m or further, against whether the sentence mentions walking</td><td>92.0 % when it does, 15.9 % when it does not</td></tr>
+    <tr><td><b>Destination</b></td><td>ends within 1 m of an object the sentence names</td><td>—</td></tr>
+    <tr><td><b>Goes through something</b></td><td>a point in a blocked cell while moving faster than 0.5 m/s</td><td>7.3 % over 5 s; turned by 90 degrees: 71.3 %</td></tr>
+  </table>
+</section>
+
+<section data-tab="Head path" id="head" hidden>
+  <p class="lead">A flow model that generates the head poses of the next 5 seconds. During training it also has to say how far the way is free around the camera, which makes it attend to the room. <b>The biggest gain came from how it is sampled, not from retraining.</b></p>
+
+  <div class="chart" id="chart-head">
+    <h4>How often a generated path goes through something</h4>
+    <p class="csub">Share of 5-second paths with a point in a blocked cell while moving. 3,000 held-out moments that go 1 m or further. Lower is better.</p>
+    <div class="clegend"><span>generated paths</span><span class="r">recorded paths, 7.3 %</span></div>
+    <div class="rows"></div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Goes when the text says so</div><div class="value">85.5 %</div><div class="note">people: 92.0 %</div></div>
+    <div class="tile"><div class="label">Goes when it does not</div><div class="value">12.3 %</div><div class="note">people: 15.9 %</div></div>
+    <div class="tile"><div class="label">Through something, first 2 s</div><div class="value">3.1 %</div><div class="note">recorded: 2.9 %</div></div>
+    <div class="tile"><div class="label">Best of 8 draws</div><div class="value">3.7 %</div><div class="note">but picking by its own estimate gives about 20 %</div></div>
+  </div>
+
+  <h2>Generated paths on the room map</h2>
+  <div class="pair">
+    <div class="card"><img src="img/paths-0.jpg" alt="Generated head paths on room maps, three moments" loading="lazy">
+      <div class="cap"><div class="h">Where it does well</div><div class="p">Left: the camera view at now with the sentence. Right: six generated paths in colour, the recorded path dashed. Top and middle follow the corridor and the gap between furniture. Bottom, on stairs: the paths clip a blocked area, where the flat map is least reliable.</div><div class="f">runs/head-v5/show/paths-0.png</div></div></div>
+    <div class="card"><img src="img/paths-2.jpg" alt="Generated head paths on room maps, three more moments" loading="lazy">
+      <div class="cap"><div class="h">Typical failures</div><div class="p">Middle: the sentence is about picking up a key and says little about direction; the paths go straight where the person turned. Bottom: the person walks 3 m to a table; the generated paths stop after about 1 m.</div><div class="f">runs/head-v5/show/paths-2.png</div></div></div>
+  </div>
+
+  <div class="callout"><div class="h">What limits it</div>
+    <ul class="tight">
+      <li><b>Over the full 5 s</b> one path in six still goes through something (recorded: one in fourteen).</li>
+      <li><b>It stops short</b> when the sentence does not say how far to go.</li>
+      <li><b>It cannot read an unseen home.</b> → tab <i>Reading the room</i>.</li>
+    </ul></div>
+</section>
+
+<section data-tab="Reading the room" id="room" hidden>
+  <p class="lead">On homes it trained on, the head-path model estimates the free distance around the camera to 0.28 m; on new homes to about 0.55 m. <b>It learns rooms, not how to read a room.</b> The most likely cause is the number of homes: 39 for training.</p>
+
+  <h2>The test bed</h2>
+  <p>A small probe has to say, from the image features of one frame, how far the way is free along 16 directions. Candidate features are compared on this before any generator is trained on them.</p>
+  <div class="pair">
+    <div class="card"><img src="img/probe-look.jpg" alt="Frames, estimated depth, and obstacle distances seen from above" loading="lazy">
+      <div class="cap"><div class="h">Checking the test bed by eye</div><div class="p">Left: the frame. Middle: estimated depth. Right: from above with the camera at the centre, the distances from the map and the points the depth gives.</div><div class="f">gray/probe.py look</div></div></div>
+    <div>
+      <div class="callout"><div class="h">Findings</div>
+        <ul class="tight">
+          <li>No feature tried changes the picture: finer grids, estimated depth, earlier frames.</li>
+          <li>Nothing reads obstacles within 2.5 m better than to about 0.45 to 0.5 m.</li>
+          <li>95 % of near obstacles are in view, so the limit is not what the camera can see.</li>
+        </ul></div>
+    </div>
+  </div>
+
+  <h2>More homes from another dataset</h2>
+  <p>Ropedia Xperience 2 has walk-throughs of other homes with a head-worn camera rig, poses and a mesh. Of 105 indoor walk-throughs online, 41 had a usable mesh.</p>
+  <div class="pair">
+    <div class="card"><img src="img/ropedia-map.jpg" alt="Free and blocked space from one walk-through's mesh" loading="lazy">
+      <div class="cap"><div class="h">One walk-through, from its mesh</div><div class="p">Floor green, things at body height red, the camera path blue.</div><div class="f">gray/ropedia.py</div></div></div>
+    <div class="card"><img src="img/ropedia-look.jpg" alt="Views cut from Ropedia with their free distances" loading="lazy">
+      <div class="cap"><div class="h">Views cut to match ours</div><div class="p">Below each view the free distance around the camera, ahead is up.</div><div class="f">ropeset/look.png</div></div></div>
+  </div>
+  <table>
+    <tr><th>Probe trained on</th><th>Held-out Nymeria homes</th><th>of that, under 1 m</th><th>Held-out Ropedia scenes</th></tr>
+    <tr><td>The median distance (no image)</td><td class="num">1.16 m</td><td class="num">0.47 m</td><td class="num">0.74 m</td></tr>
+    <tr><td>Nymeria, 39 homes</td><td class="num">0.82 m</td><td class="num">0.69 m</td><td class="num">0.65 m</td></tr>
+    <tr><td>Ropedia, 27 scenes</td><td class="num">1.00 m</td><td class="num">0.60 m</td><td class="num">0.51 m</td></tr>
+    <tr><td>Both</td><td class="num">0.81 m</td><td class="num">0.64 m</td><td class="num">0.52 m</td></tr>
+  </table>
+  <div class="callout"><div class="h">Not conclusive</div>
+    <p>Adding the Ropedia scenes does not improve reading held-out Nymeria homes (0.81 m against 0.82 m), and the two datasets transfer poorly to each other. 27 scenes from another camera rig, with a truth made differently, are too few and too different to show whether hundreds of homes would help. Worth repeating when the rest of that dataset is published.</p></div>
+</section>
+
+<section data-tab="Comparator" id="comparator" hidden>
+  <p class="lead">Given the head poses of the next 5 seconds, the comparator predicts what the camera will show at each of those frames and how uncertain that is. The signal is the <b>surprise</b>: the error divided by the predicted uncertainty. It should be about 1 while the world is as expected, whatever the head does.</p>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Prediction error</div><div class="value">0.53</div><div class="note">assuming the image stays: 1.07 to 1.16</div></div>
+    <div class="tile"><div class="label">Surprise on true frames</div><div class="value">1.08</div><div class="note">calibrated on unseen homes</div></div>
+    <div class="tile"><div class="label">Surprise while turning</div><div class="value">1.1</div><div class="note">raw error rises from 0.34 to 0.75</div></div>
+  </div>
+
+  <h2>Does it notice a changed world?</h2>
+  <p>Recordings contain no unexpected changes, so the comparator is handed another frame in place of the true one, taken from nearly the same camera pose. The threshold is set so that 5 % of true frames raise an alarm.</p>
+  <div class="chart" id="chart-alarm">
+    <h4>Alarm rate one second ahead, by what the camera is shown</h4>
+    <p class="csub">3,000 held-out moments. The first row should be near 5 %, the last high.</p>
+    <div class="clegend"><span>compare-v2: predicts one vector per frame</span><span class="s2">compare-v3: predicts the 7 x 7 image grid</span></div>
+    <div class="rows"></div>
+  </div>
+
+  <div class="callout"><div class="h">What the test shows</div>
+    <ul class="tight">
+      <li><b>The order is right,</b> and predicting the image grid catches a different scene more often: 91 % against 79 %.</li>
+      <li><b>Too many false alarms when nothing changed:</b> 16 %, or 13 % when only the part of the image on the path is compared.</li>
+      <li><b>They belong to the first second,</b> where the model is most sure and two views of an unchanged place differ by more than it allows for: hands, people, objects being handled. Two seconds ahead the rate is 9 %, four seconds ahead 6 %.</li>
+    </ul></div>
+
+  <h2>In flight</h2>
+  <table>
+    <tr><th>What</th><th>What it answers</th></tr>
+    <tr><td><b>compare-v4</b>: half of the target frames replaced by a revisit of the same place</td><td>Does the model's own uncertainty learn how much an unchanged place varies, and bring the false alarms down?</td></tr>
+    <tr><td><b>Moved-furniture test</b> in one home where it is known which furniture stood where in each recording</td><td>Does it notice a relevant change, not only a different scene?</td></tr>
+  </table>
+</section>
+
+<section data-tab="Body" id="body" hidden>
+  <p class="lead">The body model gets the head path of the next 5 seconds and generates the body along it: a pose encoding per frame plus the pelvis path and facing direction. <b>It is training now; the numbers below are early.</b></p>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Pelvis from the recorded one</div><div class="value">10.3 cm</div><div class="note">at step 3,000 of 40,000; under the camera: 22.2 cm</div></div>
+    <div class="tile"><div class="label">Without the past body</div><div class="value">11.1 cm</div><div class="note">cold start, same step</div></div>
+    <div class="tile"><div class="label">Head joint to camera, recorded</div><div class="value">14–15 cm</div><div class="note">the reference for generated bodies</div></div>
+    <div class="tile"><div class="label">Recordings with a body track</div><div class="value">1,074</div><div class="note">77 to 90 % of frames each</div></div>
+  </div>
+
+  <h2>Data: one track per recording</h2>
+  <p>The body existed only per 8-second window, each window with its own floor height, so heights jumped between windows. It was encoded again from the motion capture as one continuous track per recording, in the same representation: 272 numbers per frame, compressed by a motion autoencoder to 32 per image frame, with the pelvis path and facing direction kept separately.</p>
+
+  <h2>Design</h2>
+  <ul class="tight">
+    <li><b>Given the past body,</b> which a robot knows. In 30 % of training samples it is withheld, for the very start of a deployment.</li>
+    <li><b>Given the head path,</b> recorded in training; in the chain it comes from the head-path model.</li>
+    <li><b>Scored</b> on pelvis distance against the simple guess "straight under the camera", on facing direction, and on the pose encoding.</li>
+  </ul>
+
+  <h2>Checks prepared for when training ends</h2>
+  <table>
+    <tr><th>What</th><th>What it answers</th></tr>
+    <tr><td><b>Sampling settings</b>: 20, 4 and 1 steps, starting noise from 1 to 0</td><td>Does less noise help here as it did for the head path, at a fifth of the cost?</td></tr>
+    <tr><td><b>The chain</b>: head path from head-v5, body along it</td><td>Does the body still belong to the path: head joint near the camera, facing where the camera looks?</td></tr>
+    <tr><td><b>Rolled forward</b>: continue from its own output one second at a time</td><td>Does it drift?</td></tr>
+  </table>
+</section>
+
+<section data-tab="Negative results" id="negative" hidden>
+  <p class="lead">What was tried and did not work, and explanations that were tested and refuted.</p>
+
+  <h2>Ideas that did not help</h2>
+  <table>
+    <tr><th>Idea</th><th>Outcome</th></tr>
+    <tr><td>Text guidance when sampling head paths</td><td>No gain.</td></tr>
+    <tr><td>Estimated depth as an extra input (head-v6)</td><td>34.1 % against 33.7 % without it.</td></tr>
+    <tr><td>Explorative training, best of several noises (arXiv 2607.27372)</td><td>Worse than ordinary training.</td></tr>
+    <tr><td>Earlier frames as memory for reading obstacles</td><td>No gain in the test bed.</td></tr>
+    <tr><td>Annotated furniture boxes as the truth for collisions</td><td>Too rough at close range; replaced by walked and measured space.</td></tr>
+    <tr><td>Judging the alarm over five frames</td><td>False alarms unchanged.</td></tr>
+    <tr><td>Comparing only the part of the image on the path</td><td>False alarms 13 % against 16 %, detection falls with it.</td></tr>
+    <tr><td>More homes from Ropedia Xperience 2</td><td>Not conclusive with what is published so far.</td></tr>
+  </table>
+
+  <h2>Explanations that were refuted</h2>
+  <div class="callout">
+    <ul class="tight">
+      <li><b>"Near obstacles are out of view."</b> 95 % of them are visible in the frame.</li>
+      <li><b>"The false alarms come from loose pose matching."</b> Tightening the match to 9 cm and 5 degrees left them where they were.</li>
+      <li><b>"They come from short events."</b> Averaging over five frames did not reduce them.</li>
+      <li><b>"They come from the edges of the image."</b> Restricting the comparison to the path helped little.</li>
+    </ul></div>
+</section>
+
+<section data-tab="Next steps" id="next" hidden>
+  <p class="lead">Open work and open questions.</p>
+
+  <h2>In flight</h2>
+  <table>
+    <tr><th>What</th><th>What it answers</th></tr>
+    <tr><td><b>motion-v1</b>: the body model, training in 15-minute chunks</td><td>Can the body be generated along a given head path, with and without its own past?</td></tr>
+    <tr><td><b>compare-v4</b>: comparator trained with revisits as targets</td><td>Do the false alarms on an unchanged place come down?</td></tr>
+  </table>
+
+  <h2>Build queue</h2>
+  <table>
+    <tr><th>What</th><th>What it answers</th></tr>
+    <tr><td><b>Body checks</b>: sampling settings, the chain with head-v5, rolling forward</td><td>Whether the three parts fit together before a loop is built</td></tr>
+    <tr><td><b>Moved-furniture test</b> in Loc_08</td><td>Whether the comparator notices a relevant change</td></tr>
+    <tr><td><b>The loop on recordings</b>: plan, step, compare, replan</td><td>How often the system would stop, and how plans evolve</td></tr>
+    <tr><td><b>A figure to look at</b>: the generated body as a moving skeleton</td><td>Whether the motion looks right, which numbers do not show</td></tr>
+    <tr><td><b>A scene that can change</b>: a renderer for one home, or a robot</td><td>The comparator's real purpose; rendered image features differ strongly from real ones, which is unsolved</td></tr>
+  </table>
+
+  <h2>Open questions</h2>
+  <ul class="tight">
+    <li><b>Reading unseen rooms</b> stays limited, most likely by the number of homes. The test with another dataset was not conclusive.</li>
+    <li><b>Choosing among several drawn paths.</b> Among 8 draws one is nearly always clear, but the model's own estimate does not find it.</li>
+    <li><b>The camera of the target robot.</b> By its public description the Unitree G1's camera looks 47.6 degrees below level on a head without a neck; set aside, not verified on a robot.</li>
+  </ul>
+  <p class="small">Pictures show frames and maps derived from the Nymeria dataset and from Ropedia Xperience 2 (CC BY-NC 4.0); both are for research use. Recording names are the datasets' own identifiers.</p>
+</section>
+
+</main>
 <div class="tip" id="tip"></div>
 
 <script>
+const sections = [...document.querySelectorAll('main > section')];
+const nav = document.getElementById('tabs');
+sections.forEach((sec, i) => {
+  const b = document.createElement('button');
+  b.textContent = sec.dataset.tab;
+  b.setAttribute('role', 'tab');
+  b.setAttribute('aria-selected', String(!sec.hidden));
+  b.addEventListener('click', () => select(i, true));
+  nav.appendChild(b);
+});
+function select(i, push) {
+  sections.forEach((sec, j) => {
+    sec.hidden = j !== i;
+    nav.children[j].setAttribute('aria-selected', String(j === i));
+  });
+  if (push) history.replaceState(null, '', '#' + sections[i].id);
+  window.scrollTo(0, 0);
+}
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const cur = sections.findIndex(s => !s.hidden);
+  if (e.key === 'ArrowRight' && cur < sections.length - 1) select(cur + 1, true);
+  if (e.key === 'ArrowLeft'  && cur > 0) select(cur - 1, true);
+});
+const initial = sections.findIndex(s => '#' + s.id === location.hash);
+select(initial >= 0 ? initial : 0, false);
+
 const head = [
   ["head-v3: moments", 40.8, "Dest. reached 53.7 %"],
   ["head-v4: + image grid of the current frame", 36.1, "Dest. reached 50.4 %"],
@@ -308,5 +577,4 @@ function bar(track, value, max, cls, vcls) {
   }
 })();
 </script>
-</body>
-</html>
+</body></html>
