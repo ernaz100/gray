@@ -174,7 +174,7 @@ ul.tight li { margin: .25rem 0; }
   <div class="pipe">
     <div class="stage"><div class="t">1 · Head path</div><div class="d">image + text → where the head goes in the next 5 s</div><div class="s"><b>Usable:</b> head-v5, sampled in 4 steps with half the starting noise</div></div>
     <div class="stage"><div class="t">2 · Comparator</div><div class="d">head path → what the camera should show, with its uncertainty</div><div class="s"><b>Works, too many false alarms:</b> compare-v3; compare-v4 queued</div></div>
-    <div class="stage"><div class="t">3 · Body</div><div class="d">head path → the body motion that carries the head along it</div><div class="s"><b>Training:</b> motion-v1, body tracks rebuilt for all recordings</div></div>
+    <div class="stage"><div class="t">3 · Body</div><div class="d">head path → the body motion that carries the head along it</div><div class="s"><b>First model done:</b> motion-v1 places the pelvis within 5 cm and holds along generated head paths</div></div>
     <div class="stage"><div class="t">4 · The loop</div><div class="d">plan, move, compare, replan</div><div class="s"><b>Not started.</b></div></div>
     <div class="stage"><div class="t">5 · A scene that changes</div><div class="d">a renderer or a robot</div><div class="s"><b>Not started.</b> Rendered features differ strongly from real ones</div></div>
   </div>
@@ -224,7 +224,7 @@ ul.tight li { margin: .25rem 0; }
     <line class="arrow" x1="755" y1="125" x2="828" y2="125" marker-end="url(#arrP)"/>
     <text class="io" x="792" y="48" text-anchor="middle">surprise =</text>
     <text class="io" x="792" y="64" text-anchor="middle">error / uncertainty</text>
-    <rect class="bx prog" x="830" y="75" width="205" height="100" rx="10"/>
+    <rect class="bx done" x="830" y="75" width="205" height="100" rx="10"/>
     <text x="932" y="103" text-anchor="middle">3 · Body</text>
     <text class="d" x="932" y="123" text-anchor="middle">pose encoding and root path</text>
     <text class="d" x="932" y="139" text-anchor="middle">along the head path</text>
@@ -242,7 +242,7 @@ ul.tight li { margin: .25rem 0; }
     <tr><th>Part</th><th>Given</th><th>Produces</th><th>How it is judged</th><th>Status</th></tr>
     <tr><td><b>Head path</b></td><td>past head poses and images (2 s), the sentence, the 7 x 7 image grid at now</td><td>head poses of the next 5 s</td><td>goes when told; reaches a named object; goes through something</td><td>usable</td></tr>
     <tr><td><b>Comparator</b></td><td>the same, plus the head poses of the next 5 s</td><td>the image features of those frames and how uncertain each is</td><td>alarm rate when shown another frame than the true one</td><td>false alarms too high</td></tr>
-    <tr><td><b>Body</b></td><td>the same, plus the past body</td><td>pose encoding, pelvis path and facing direction for 5 s</td><td>pelvis and facing against the recorded body; head joint against the camera</td><td>training</td></tr>
+    <tr><td><b>Body</b></td><td>the same, plus the past body</td><td>pose encoding, pelvis path and facing direction for 5 s</td><td>pelvis and facing against the recorded body; head joint against the camera</td><td>first model done</td></tr>
   </table>
 
   <h2>Why a flow model that predicts the clean value</h2>
@@ -414,12 +414,12 @@ ul.tight li { margin: .25rem 0; }
 </section>
 
 <section data-tab="Body" id="body" hidden>
-  <p class="lead">The body model gets the head path of the next 5 seconds and generates the body along it: a pose encoding per frame plus the pelvis path and facing direction. <b>It is training now; the numbers below are early.</b></p>
+  <p class="lead">The body model gets the head path of the next 5 seconds and generates the body along it: a pose encoding per frame plus the pelvis path and facing direction. <b>The first model places the pelvis within 5 cm, and its body still belongs to the path when the path is generated.</b></p>
 
   <div class="tiles">
-    <div class="tile"><div class="label">Pelvis from the recorded one</div><div class="value">10.3 cm</div><div class="note">at step 3,000 of 40,000; under the camera: 22.2 cm</div></div>
-    <div class="tile"><div class="label">Without the past body</div><div class="value">11.1 cm</div><div class="note">cold start, same step</div></div>
-    <div class="tile"><div class="label">Head joint to camera, recorded</div><div class="value">14–15 cm</div><div class="note">the reference for generated bodies</div></div>
+    <div class="tile"><div class="label">Pelvis from the recorded one</div><div class="value">4.7 cm</div><div class="note">held-out homes; straight under the camera: 22 cm</div></div>
+    <div class="tile"><div class="label">Without the past body</div><div class="value">6.0 cm</div><div class="note">cold start</div></div>
+    <div class="tile"><div class="label">Head joint to camera, generated path</div><div class="value">12.7 cm</div><div class="note">recorded bodies: 13.5 cm; no drift over 5 s</div></div>
     <div class="tile"><div class="label">Recordings with a body track</div><div class="value">1,074</div><div class="note">77 to 90 % of frames each</div></div>
   </div>
 
@@ -433,13 +433,30 @@ ul.tight li { margin: .25rem 0; }
     <li><b>Scored</b> on pelvis distance against the simple guess "straight under the camera", on facing direction, and on the pose encoding.</li>
   </ul>
 
-  <h2>Checks prepared for when training ends</h2>
+  <h2>Sampling: fewer steps and less noise, as for the head path</h2>
   <table>
-    <tr><th>What</th><th>What it answers</th></tr>
-    <tr><td><b>Sampling settings</b>: 20, 4 and 1 steps, starting noise from 1 to 0</td><td>Does less noise help here as it did for the head path, at a fifth of the cost?</td></tr>
-    <tr><td><b>The chain</b>: head path from head-v5, body along it</td><td>Does the body still belong to the path: head joint near the camera, facing where the camera looks?</td></tr>
-    <tr><td><b>Rolled forward</b>: continue from its own output one second at a time</td><td>Does it drift?</td></tr>
+    <tr><th>Steps</th><th>Starting noise</th><th>Pelvis</th><th>Facing</th><th>Pose error</th></tr>
+    <tr><td class="num">20</td><td class="num">1.0</td><td class="num">5.7 cm</td><td class="num">8.8°</td><td class="num">0.56</td></tr>
+    <tr><td class="num">4</td><td class="num">1.0</td><td class="num">5.1 cm</td><td class="num">8.0°</td><td class="num">0.51</td></tr>
+    <tr><td class="num"><b>4</b></td><td class="num"><b>0.3</b></td><td class="num"><b>4.7 cm</b></td><td class="num"><b>7.3°</b></td><td class="num"><b>0.47</b></td></tr>
+    <tr><td class="num">1</td><td class="num">0.0</td><td class="num">6.1 cm</td><td class="num">7.8°</td><td class="num">0.47</td></tr>
   </table>
+  <p class="small">With the past body, along the recorded head path, 755 held-out moments. Pose error: 1.0 is what the average pose scores.</p>
+
+  <h2>The chain: does the body belong to a generated head path?</h2>
+  <table>
+    <tr><th></th><th>Head joint to camera, seconds 1 to 5</th><th>Body facing against camera</th></tr>
+    <tr><td>Recorded body, recorded path</td><td>13.5 · 13.5 · 13.4 · 13.3 · 13.5 cm</td><td>22 to 24°</td></tr>
+    <tr><td>Generated body, recorded path</td><td>13.2 · 13.2 · 13.0 · 12.8 · 13.1 cm</td><td>21 to 23°</td></tr>
+    <tr><td>Generated body, path from head-v5</td><td>13.0 · 12.8 · 12.6 · 12.5 · 12.7 cm</td><td>15 to 21°</td></tr>
+  </table>
+  <div class="callout"><div class="h">What the checks show</div>
+    <ul class="tight">
+      <li><b>The body follows a generated path as it follows a recorded one.</b> The head joint stays where the camera is, without drift over 5 s.</li>
+      <li><b>No drift when rolled forward.</b> Continuing from its own output one second at a time gives a pelvis error of 3.6 to 5.6 cm over five seconds, against 3.7 to 5.5 cm for generating the 5 s at once.</li>
+      <li><b>Along generated paths the body faces nearer to where the camera looks.</b> Generated head paths look around less than people do.</li>
+      <li><b>Not yet seen as a moving figure.</b> The numbers do not show foot sliding or stiff poses.</li>
+    </ul></div>
 </section>
 
 <section data-tab="Negative results" id="negative" hidden>
@@ -474,14 +491,12 @@ ul.tight li { margin: .25rem 0; }
   <h2>In flight</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
-    <tr><td><b>motion-v1</b>: the body model, training in 15-minute chunks</td><td>Can the body be generated along a given head path, with and without its own past?</td></tr>
     <tr><td><b>compare-v4</b>: comparator trained with revisits as targets</td><td>Do the false alarms on an unchanged place come down?</td></tr>
   </table>
 
   <h2>Build queue</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
-    <tr><td><b>Body checks</b>: sampling settings, the chain with head-v5, rolling forward</td><td>Whether the three parts fit together before a loop is built</td></tr>
     <tr><td><b>Moved-furniture test</b> in Loc_08</td><td>Whether the comparator notices a relevant change</td></tr>
     <tr><td><b>The loop on recordings</b>: plan, step, compare, replan</td><td>How often the system would stop, and how plans evolve</td></tr>
     <tr><td><b>A figure to look at</b>: the generated body as a moving skeleton</td><td>Whether the motion looks right, which numbers do not show</td></tr>

@@ -62,7 +62,9 @@ class Decoder:
         local = self.codec.decode(body[..., :32].float())[..., 8:74]
         local = local.reshape(*local.shape[:-1], 22, 3)
         xz, yaw = self.root.root_path(body[..., 32:].float())
-        turned = torch.einsum("...ji,...kj->...ki", self.ap.rot_yaw(yaw), local)
+        c, s, zero, one = torch.cos(yaw), torch.sin(yaw), torch.zeros_like(yaw), torch.ones_like(yaw)
+        heading = torch.stack([torch.stack([c, zero, s], -1), torch.stack([zero, one, zero], -1), torch.stack([-s, zero, c], -1)], -2)  # as to_actionplan.rot_yaw
+        turned = torch.einsum("...ji,...kj->...ki", heading, local)
         turned[..., 0] += xz[..., None, 0]
         turned[..., 2] += xz[..., None, 1]
         return turned[:, ::2]

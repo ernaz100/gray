@@ -1266,3 +1266,60 @@ grid at now, it generates the body of those 5 s (pose latent and root path, 36 n
 as a flow model like `head.py`. The past body is withheld in 30 % of the samples (cold start).
 Scores on held-out homes: pelvis distance against "straight under the camera", root yaw, latent
 error, warm and cold. `tests/smoke_motion.py` passes. Results: pending.
+
+### motion-v1: result, and the checks before the loop (23 Nov, jobs 13606041 to 13606054 on the test partition, `gray/chain.py`, job 13611133)
+
+Trained 40,000 steps in fourteen 15-minute jobs that resume one another. On 1,015 held-out moments,
+one generated body per moment along the recorded head path (20 steps, full noise):
+
+| | With the past body | Without it |
+|---|---:|---:|
+| Pelvis from the recorded one | 5.6 cm | 7.1 cm |
+| Root yaw | 8.9 degrees | 12.3 degrees |
+| Latent error (1.0 is the average pose) | 0.56 | 0.69 |
+
+The pelvis placed straight under the camera is 22.2 cm off. The held-out loss was flat at the
+end (0.0664, 0.0665).
+
+Checks on 755 held-out moments that have a body for 11 s. Decoding was verified on the recorded
+body first: its head joint is 13.5 cm from the camera, as measured when the tracks were built.
+
+**Sampling.** With the past body:
+
+| Steps | Starting noise | Pelvis | Yaw | Latent | Head joint to camera |
+|---:|---:|---:|---:|---:|---:|
+| 20 | 1.0 | 5.7 cm | 8.8 | 0.56 | 13.3 cm |
+| 4 | 1.0 | 5.1 cm | 8.0 | 0.51 | 13.1 cm |
+| 4 | 0.3 | 4.7 cm | 7.3 | 0.47 | 13.0 cm |
+| 4 | 0.0 | 4.7 cm | 7.2 | 0.46 | 13.0 cm |
+| 1 | 0.0 | 6.1 cm | 7.8 | 0.47 | 13.8 cm |
+
+As for the head path, fewer steps and less noise are better and five times cheaper. One step is
+worse for the pelvis. Without the past body the same order holds (6.0 cm at 4 steps and noise 0.3,
+against 7.1 cm). Setting from now on: 4 steps, noise 0.3.
+
+**The chain.** Head path from `head-v5` (4 steps, half the noise), body along it. Per second 1 to 5:
+
+| | Head joint to camera, cm | Body facing against camera, degrees | Pelvis from under the camera, cm |
+|---|---|---|---|
+| Recorded body, recorded path | 13.5 13.5 13.4 13.3 13.5 | 23.6 23.3 22.2 22.8 22.1 | 22.4 22.0 22.3 22.5 22.8 |
+| Generated body, recorded path | 13.2 13.2 13.0 12.8 13.1 | 22.8 22.0 20.7 21.0 20.7 | 22.3 22.3 22.7 23.0 23.4 |
+| Generated body, generated path | 13.0 12.8 12.6 12.5 12.7 | 20.7 17.9 16.7 15.9 15.4 | 21.9 21.6 21.7 22.1 22.6 |
+
+The body belongs to a generated path as it does to a recorded one: the head joint stays where
+the camera is, without drift over the 5 s. Along generated paths the body faces nearer to where
+the camera looks (15 to 21 degrees against 22 to 23). That is a property of the generated head
+paths, which look around less than people do, not a lag of the body.
+
+**Rolled forward** along the recorded head path, five times 1 s, continuing from its own output:
+
+| Second | 1 | 2 | 3 | 4 | 5 |
+|---|---:|---:|---:|---:|---:|
+| Pelvis, rolled forward | 3.6 | 4.7 | 5.2 | 5.4 | 5.6 cm |
+| Pelvis, the 5 s at once | 3.7 | 4.5 | 4.8 | 5.0 | 5.5 cm |
+| Head joint to camera, rolled forward | 13.2 | 13.0 | 12.7 | 12.6 | 12.8 cm |
+
+No drift: continuing from its own output costs nothing against generating the 5 s at once.
+
+Not tested: rolling the head path forward as well (needs the images along a path nobody walked),
+and how the motion looks; the numbers do not show foot sliding or stiff poses.
