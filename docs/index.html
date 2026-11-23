@@ -423,6 +423,19 @@ ul.tight li { margin: .25rem 0; }
     <div class="tile"><div class="label">Recordings with a body track</div><div class="value">1,074</div><div class="note">77 to 90 % of frames each</div></div>
   </div>
 
+  <h2>Prompted in a home: Loc_08</h2>
+  <p>The chain run at a spot in one home: the recorded frame nearest to the spot gives the image and the 2 seconds before, <code>head-v5</code> plans the head path from the prompt, <code>motion-v1</code> generates the body along it. Loc_08 is a home the models trained on, so this shows how the parts work together, not how they generalise.</p>
+  <div class="grid">
+    <div class="card"><video src="media/loc08-hallway.mp4" controls preload="metadata"></video>
+      <div class="cap"><div class="h">"C walks down the hallway to the bedroom."</div><div class="p">Walks 3.4 m along a curved plan through free space. Left: from above, planned camera path dashed, pelvis trail blue. Right: the figure, with the planned camera position as a grey dot.</div><div class="f">gray/scene_worker.py --demo · reply-5</div></div></div>
+    <div class="card"><video src="media/loc08-sofa.mp4" controls preload="metadata"></video>
+      <div class="cap"><div class="h">"C turns around and walks to the sofa."</div><div class="p">Walks 2.2 m; the head joint stays 13 cm from the planned camera.</div><div class="f">reply-2</div></div></div>
+    <div class="card"><video src="media/loc08-forward.mp4" controls preload="metadata"></video>
+      <div class="cap"><div class="h">"C walks forward." — a weak one</div><div class="p">The matched person stood at a counter. The figure stays for three seconds, then moves 0.6 m into an area marked as blocked.</div><div class="f">reply-0</div></div></div>
+  </div>
+  <div class="card" style="max-width: 1000px; margin-bottom: 1.4rem;"><img src="img/motion-sheet.jpg" alt="Six prompts in Loc_08, six stages each, seen from above" loading="lazy">
+    <div class="cap"><div class="h">Six prompts, one per row, at 0 to 5 s</div><div class="p">Seen from above on the map of free (green) and blocked (red, black) space.</div><div class="f">gray/animate.py --sheet</div></div></div>
+
   <h2>Data: one track per recording</h2>
   <p>The body existed only per 8-second window, each window with its own floor height, so heights jumped between windows. It was encoded again from the motion capture as one continuous track per recording, in the same representation: 272 numbers per frame, compressed by a motion autoencoder to 32 per image frame, with the pelvis path and facing direction kept separately.</p>
 

@@ -29,6 +29,9 @@ where a narration sentence starts.
 | Body motion of each recording as one track (encoded again from the motion capture) | `gray/body.py` | `body.sbatch` | `body/<id>.npz` |
 | The body model: the head path of the next 5 s -> the body along it | `gray/motion.py` | `motion.sbatch` | `runs/<name>/` |
 | Checks of the body model: sampling settings, the chain with the head-path model, rolling forward | `gray/chain.py` | `chain.sbatch` | `runs/<name>/chain.json` |
+| Prompt the chain at a spot in a recorded home (worker for the Loc_08 viewer; `--demo` without it) | `gray/scene_worker.py` | `scene.sbatch` | `runs/scene-demo/` |
+| Workstation: serve the Loc_08 viewer and forward prompts to the worker | `gray/scene_server.py` | | |
+| Workstation: videos of generated motion on the room map | `gray/animate.py` | | |
 | For every frame a later frame from nearly the same pose (targets for the comparator) | `gray/revisits.py` | `revisits.sbatch` | `revisits/<id>.npy` |
 | Does the comparator notice another frame than the true one? | `gray/alarm.py` | `alarm.sbatch` | `runs/<name>/alarm*.json` |
 

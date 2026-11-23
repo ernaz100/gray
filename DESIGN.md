@@ -1323,3 +1323,29 @@ No drift: continuing from its own output costs nothing against generating the 5 
 
 Not tested: rolling the head path forward as well (needs the images along a path nobody walked),
 and how the motion looks; the numbers do not show foot sliding or stiff poses.
+
+### The chain prompted in Loc_08 (23 Nov, `gray/scene_worker.py`, `gray/animate.py`, job 13611998)
+
+A worker that runs the chain at a requested spot in one home, in the protocol of the earlier
+project's scene worker, so that the Loc_08 viewer page works with it (`gray/scene_server.py`
+serves the page from the workstation). Per request: the recorded frame nearest to the spot gives
+the image and the 2 s before (head, images, body); `head-v5` plans the head path from the prompt;
+`motion-v1` generates the body along it; the body is decoded and placed at the spot. A request
+takes 0.14 s once the models are loaded. The comparator is not part of it yet.
+
+Six prompts at random recorded spots (`--demo`), rendered as videos (`docs/media/`) and one sheet:
+
+| Prompt | Pelvis travels | Head joint to planned camera |
+|---|---:|---:|
+| C walks forward. | 0.63 m | 16.4 cm |
+| C walks to the kitchen. | 1.58 m | 8.8 cm |
+| C turns around and walks to the sofa. | 2.21 m | 12.8 cm |
+| C stands still and looks around. | 0.35 m | 9.8 cm |
+| C walks to the table. | 1.82 m | 12.7 cm |
+| C walks down the hallway to the bedroom. | 3.36 m | 9.5 cm |
+
+Looked at as stills from the videos and the sheet: the figures are upright and walk along the
+planned path through free space; the one told to stand stays; "walks forward" from a person
+standing at a counter stays for three seconds and then moves into a blocked area. Not judged:
+whether the named place is reached (the kitchen, the sofa), and foot sliding, which stills do not
+show. Loc_08 is a training home, so this says how the parts work together, not how they generalise.
