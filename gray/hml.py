@@ -4,6 +4,7 @@
     python -m gray.hml offset  --data <folder> --steer <folder>     # how the camera sits on the head joint, from Nymeria
     python -m gray.hml encode  --data <folder> --steer <folder>     # all motions
     python -m gray.hml census  --data <folder>                      # how many motions candidate subsets keep
+    python -m gray.hml text    --data <folder>                      # text features of the captions (text_tokens.npy, text_index.json)
 
 HumanML3D (the 272-number representation at 30 frames per second, Hugging Face royrhea/272-dim-HumanML3D:
 <data>/hml3d/motion_data.zip, texts.zip, split/) has bodies and captions but no camera. To train on it next to Nymeria
@@ -192,16 +193,39 @@ def census(args) -> None:
              **{"rule " + k: v for k, v in rules.items()})
 
 
+def text(args) -> None:
+    """The CLIP token features of every whole-clip caption of the motions that are 5.1 s or longer, as the cache has them for Nymeria's sentences."""
+    from gray.scene_worker import Text
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    weights = args.data / "clip"
+    reader = Text(device, weights if weights.is_dir() else None)
+    captions = json.loads((args.data / "hml3d" / "texts.json").read_text())
+    d = np.load(args.data / "hml3d" / "hml.npz")
+    long_enough = {str(n) for n, length in zip(d["names"], np.diff(d["start"])) if length >= 76}
+    tokens, where, total = [], {}, 0
+    for name in sorted(long_enough):
+        where[name] = []
+        for caption in captions.get(name, []):
+            feature = reader(caption).half().cpu().numpy()
+            tokens.append(feature)
+            where[name].append([total, total + len(feature)])
+            total += len(feature)
+    np.save(args.data / "hml3d" / "text_tokens.npy", np.concatenate(tokens))
+    (args.data / "hml3d" / "text_index.json").write_text(json.dumps(where))
+    print(f"{len(tokens):,d} captions of {len(where):,d} motions, {total:,d} tokens ({total * 768 * 2 / 1e9:.1f} GB)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("step", choices=("offset", "encode", "census"))
+    parser.add_argument("step", choices=("offset", "encode", "census", "text"))
     parser.add_argument("--data", type=Path, required=True, help="the folder with hml3d/ (and, for offset, body/ and tracks/ of some Nymeria recordings)")
     parser.add_argument("--steer", type=Path, default=Path("/u/enazaren/projects/STEER"))
     parser.add_argument("--recordings", type=int, default=61, help="offset: how many Nymeria recordings")
     parser.add_argument("--limit", type=int, default=None, help="encode: only the first motions")
     args = parser.parse_args()
     args.data, args.steer = args.data.expanduser(), args.steer.expanduser()
-    {"offset": offset, "encode": encode, "census": census}[args.step](args)
+    {"offset": offset, "encode": encode, "census": census, "text": text}[args.step](args)
 
 
 if __name__ == "__main__":

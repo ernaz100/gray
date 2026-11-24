@@ -15,6 +15,7 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
       camera-on-head transform of Nymeria (12.3 cm; single frames differ by 4.4 cm and 18 degrees, median).
       On the workstation in `gray/local/data/hml3d/`; the archives are also on Viper in `/ptmp/enazaren/hml3d`.
 - [ ] **A HumanML3D subset.** Counts are in (`gray/hml.py census`); the rule is to be chosen with the user.
+- [x] Text features of the HumanML3D captions: 57,052 captions of 19,848 motions (`hml3d/text_tokens.npy`, 1.5 GB).
 - [ ] **Samples from HumanML3D in the loaders**, with a "no image" token, so that `motion.py` and `head.py`
       can train on a mixture.
 
@@ -31,9 +32,15 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
       the text, cut to 5 s. Open: it was trained with all sentences that overlap an 8 s window, ours with one sentence
       per 5 s; how to make that fair (same text for both, or retrain it on moments).
 - [ ] **UniEgoMotion as a baseline** (user, 24 Nov: take it as released, and train a version of ours on the data it
-      uses). Needs: its released weights and code; EE4D-Motion (on the MPI cluster under `/scratch/inf0/user/enazaren/ee4d`)
-      brought into our form (body latents, head path, image features); a run of our chain on it. EE4D-Motion has
-      no captions, so this comparison is without text. Not started; the MPI cluster is not connected.
+      uses). On the MPI cluster under `/scratch/inf0/user/enazaren`: its code, the released weights
+      (`UniEgoMotion/exp/uem_v4b_dinov2/last.ckpt`), and its processed data (`ee4d/uniegomotion`, 36 GB: motion for
+      training and validation, DINOv2 image features per frame, the validation truth for its evaluation). Being copied
+      to the workstation (`gray/local/uniegomotion`, `gray/local/data/ee4d`). Clips are 8 s at 10 frames per second;
+      there are no captions, so this comparison is without text. Steps:
+  - [ ] read its data format; bring it into our form (body in our encoding at 15 per second, camera path, its image features)
+  - [ ] run its released model and its evaluation on its validation set (needs its environment and the SMPL-X model)
+  - [ ] train our chain on its training set; score both on the first 5 s with its measures and ours
+  - note: its repository has a two-stage configuration (a trajectory model, then motion), the same order as our chain
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
       and whether the feet are on the floor.
 
@@ -46,11 +53,12 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 
 ## Running
 
-- [ ] `compare-v4` (comparator trained with revisits as targets): six 1-hour jobs queued on Viper
-      (13641519 to 13641524) and its alarm test (13641525).
+Nothing.
 
 ## Parked
 
+- [ ] Comparator: `compare-v4` (trained with revisits as targets) stopped at 2,500 of 20,000 steps when the comparator was
+      parked (24 Nov; state in `runs/compare-v4`, resumes with `jobs/chain_train.sh`). At 2,500 steps an hour it needs 8 h.
 - [ ] Comparator: the moved-furniture test in Loc_08; connecting it to the chain; what to do after a surprise.
 - [ ] A scene that really changes (edited real frames, a renderer, or a robot).
 - [ ] Choosing among several drawn head paths.
