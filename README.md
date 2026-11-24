@@ -2,6 +2,8 @@
 
 **Overview with pictures:** open [`docs/index.html`](docs/index.html) in a browser after cloning. It summarises the state of the research, with figures and the main numbers.
 
+**What is open:** [`BACKLOG.md`](BACKLOG.md).
+
 
 Egocentric image and text in, body motion out, with a comparator that notices when the world
 differs from what was predicted. `DESIGN.md` has the reasoning, every experiment and its numbers
