@@ -10,14 +10,13 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 
 ## Now
 
-- [ ] **HumanML3D in our format.** Download the 272-number representation (Hugging Face
-      `royrhea/272-dim-HumanML3D`, 8.4 GB, Apache-2.0, for academic use, under the AMASS licence) to
-      `/ptmp/enazaren/hml3d`; encode with the motion autoencoder; build samples shaped like moments
-      (2 s given, 5 s generated), with a head path derived from the head joint and the average
-      head-to-camera offset measured in Nymeria, and a "no image" token in place of image features.
-- [ ] **A HumanML3D subset.** Keep motions that travel and are long enough; drop dancing, sports and
-      on-the-spot actions, by caption words and by how far the pelvis moves. Report how many remain
-      before training on them.
+- [x] **HumanML3D in our format** (`gray/hml.py`, 24 Nov). 26,682 motions (half of them mirrored copies), 54.9 h,
+      encoded with the motion autoencoder; a camera pose per frame from the head joint and the average
+      camera-on-head transform of Nymeria (12.3 cm; single frames differ by 4.4 cm and 18 degrees, median).
+      On the workstation in `gray/local/data/hml3d/`; the archives are also on Viper in `/ptmp/enazaren/hml3d`.
+- [ ] **A HumanML3D subset.** Counts are in (`gray/hml.py census`); the rule is to be chosen with the user.
+- [ ] **Samples from HumanML3D in the loaders**, with a "no image" token, so that `motion.py` and `head.py`
+      can train on a mixture.
 
 ## Next
 

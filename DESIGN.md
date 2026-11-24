@@ -1381,3 +1381,37 @@ plans clear in 6, 5, 5, 1, 5, 0, 6, 6, 6, 0, 3 and 6 of 6. Seen in the pictures:
   stairs as blocked.
 - One sample goes the wrong way: the view at now shows only a table, and the plans head into
   blocked space where the person turned to the hallway.
+
+## Motion quality first: HumanML3D (from 24 Nov 2026, afternoon)
+
+The user set the comparator aside for now: first good motion, by also training on HumanML3D
+(images replaced by a "no image" token, text as the condition, as EgoPriMo does), and a
+comparison with EgoPriMo and UniEgoMotion. `BACKLOG.md` holds the open tasks.
+
+### HumanML3D in the form of our samples (`gray/hml.py`, on the workstation)
+
+The 272-number representation at 30 frames per second (Hugging Face `royrhea/272-dim-HumanML3D`,
+8.4 GB, Apache-2.0, academic use under the AMASS licence): 26,682 motions of 2 to 10 s, half of
+them mirrored copies, 54.9 h. Encoded with the same autoencoder as Nymeria's bodies (it was
+trained on this data): latents of size 2.2, as Nymeria's.
+
+HumanML3D has no camera. A camera pose per frame is made from the head joint and one fixed
+transform: the average of how Nymeria's camera sits on the head joint, measured on 43,920 frames
+of the 61 recordings on the workstation (decoded bodies against camera tracks). The camera is
+12.3 cm from the joint (10.9 cm ahead, 5.4 cm up); single frames differ from the mean by 4.4 cm
+and by 17.9 degrees of rotation (median; 33 degrees at the 90 % mark), because glasses do not
+follow the head joint exactly. So the head paths made for HumanML3D are smoother and more
+regular than real ones.
+
+What candidate subsets keep (a 7 s sample every second; with one given frame 5.1 s suffice):
+
+| Rule | Motions | Hours | Samples |
+|---|---:|---:|---:|
+| All with a caption | 26,680 | 54.9 | 84,086 |
+| 5.1 s or longer | 19,846 | 47.7 | 77,252 |
+| ... and the pelvis gets 1 m or further | 9,314 | 21.6 | 33,824 |
+| ... and the caption mentions walking | 8,604 | 19.9 | 30,896 |
+| ... and no dancing, jumping, fighting, crawling, throwing | 7,712 | 17.7 | 27,354 |
+
+For comparison, Nymeria's navigation subset has 39,130 training samples. Of the motions that
+travel, 27 % mention turning, 11 % running, 7 % jumping, 6 % stairs.
