@@ -1361,3 +1361,23 @@ steers; "stands still" at a spot where the person was walking still moves 1.7 m.
 the home's mesh scene rendered in Blender with the planned head path and the body as an SMPL
 mesh, and the scene from the planned camera poses. Where the real view shows a television or a
 dresser, the render from the planned camera shows it too, so plan, scene and recording line up.
+
+### A gallery of head paths to judge by eye (24 Nov, `gray/gallery.py`)
+
+Per held-out sample one picture: the camera view at now and what the camera showed 1, 2.5 and
+5 s later; six plans on the map, green if they go through nothing and red if they do; five other
+prompts from the same view (one path each, no noise); and six paths from full noise next to the
+one without. Made on the workstation from a copy of 35 held-out recordings (59 GB, 2,904 of the
+samples the scores use), since the queue on Viper did not start the job for an hour.
+
+First round, twelve random samples from four held-out homes (six recordings were local then):
+plans clear in 6, 5, 5, 1, 5, 0, 6, 6, 6, 0, 3 and 6 of 6. Seen in the pictures:
+
+- The other prompts give clearly different paths from one view: left, right, back.
+- Plans leave rooms through doors and follow hallways in homes the model never saw.
+- Of a long sentence with two turns, the first is followed.
+- Several failures are a wall corner clipped by centimetres.
+- The two samples with 0 and 1 of 6 at a staircase are not reliable: the map is flat and marks
+  stairs as blocked.
+- One sample goes the wrong way: the view at now shows only a table, and the plans head into
+  blocked space where the person turned to the hallway.

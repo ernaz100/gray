@@ -161,6 +161,9 @@ ul.tight li { margin: .25rem 0; }
 .ask .q { font-weight: 600; font-size: 1rem; }
 .ask .w { font-size: .88rem; color: var(--ink-2); margin: .2rem 0; }
 .ask .o { font-size: .88rem; }
+
+.card.shot { max-width: 1500px; margin: .8rem 0 1.1rem; }
+.card.shot img { cursor: zoom-in; }
 </style></head>
 <body>
 
@@ -172,12 +175,12 @@ ul.tight li { margin: .25rem 0; }
 
 <section data-tab="Summary" id="summary">
   <h2>The idea</h2>
-  <p class="lead"><b>Camera image and a sentence in, motion out</b>, with a check that notices when the world is not as expected and triggers a new plan.</p>
+  <p class="lead"><b>Camera image and a sentence in, motion out</b>, with a check that notices when the world is not as expected and triggers a new plan. This page is about the first stage, the head path.</p>
   <div class="pipe">
     <div class="stage"><div class="t">Sees and is told</div><div class="d">camera image, a sentence, its own pose</div></div>
-    <div class="stage"><div class="t">1 · Plans the head path</div><div class="d">where the camera goes in the next 5 s</div></div>
-    <div class="stage"><div class="t">2 · Expects what it will see</div><div class="d">and compares: a surprise means replan</div></div>
-    <div class="stage"><div class="t">3 · Moves the body</div><div class="d">along the planned head path</div></div>
+    <div class="stage" style="border-color: var(--accent); border-width: 2px;"><div class="t">1 · Plans the head path</div><div class="d">where the camera goes in the next 5 s</div><div class="s"><b>This page</b></div></div>
+    <div class="stage"><div class="t">2 · Expects what it will see</div><div class="d">and compares: a surprise means replan</div><div class="s">in progress, see its tab</div></div>
+    <div class="stage"><div class="t">3 · Moves the body</div><div class="d">along the planned head path</div><div class="s">in progress, see its tab</div></div>
   </div>
 
   <h2>The data setup</h2>
@@ -222,10 +225,8 @@ ul.tight li { margin: .25rem 0; }
       <div class="cap"><div class="h">Three samples</div><div class="p">Left: the camera view at now with its sentence. Right: the home from above with the 2 s before (grey), the recorded 5 s (dashed) and generated paths (colour).</div></div></div>
   </div>
 
-  <h2>What we tried, and how it performs</h2>
-  <p>Three models, each a transformer of about 27 to 30 M parameters, trained separately for 2 to 3 hours on one GPU and then chained.</p>
-
-  <h3>1 · Head path</h3>
+  <h2>The head path: what we tried, and how it performs</h2>
+  <p>A transformer of 26.7 M parameters, trained for 2 hours on one GPU on 39,130 samples. It generates the 75 head poses of the next 5 seconds from noise, in a few steps, given the past 2 seconds, the sentence and the image grid of the current frame.</p>
   <div class="pair">
     <div class="chart" data-chart="head">
       <h4>Paths that go through something</h4>
@@ -240,63 +241,59 @@ ul.tight li { margin: .25rem 0; }
       <div class="rows"></div>
     </div>
   </div>
-  <p class="small"><b>Tried:</b> adding the image grid, the free distance as an extra training target, estimated depth as input (no gain), text guidance (no gain), explorative training (worse). The largest gain came from sampling with fewer steps and less noise, without retraining.</p>
+  <p class="small"><b>Tried:</b> adding the image grid, the free distance as an extra training target, estimated depth as input (no gain), text guidance (no gain), explorative training (worse). The largest gain came from sampling with fewer steps and less starting noise, without retraining.</p>
 
-  <h3>2 · Comparator</h3>
-  <div class="pair">
-    <div class="chart" data-chart="alarm">
-      <h4>Alarm rate one second ahead, by what the camera is shown</h4>
-      <p class="csub">3,000 held-out samples. The first row should be near 5 %, the last high.</p>
-      <div class="clegend"><span>predicts one vector per frame</span><span class="s2">predicts the 7 × 7 image grid</span></div>
-      <div class="rows"></div>
-    </div>
-    <div class="callout"><div class="h">Reading the chart</div>
-      <ul class="tight">
-        <li><b>A different scene is caught</b> in 91 % of cases.</li>
-        <li><b>An unchanged place seen again alarms in 16 %.</b> This is the open problem: hands, people and handled objects vary more than the model allows for.</li>
-        <li><b>Turning does not alarm:</b> the surprise stays at 1.1 while the raw error doubles.</li>
-        <li><b>Tried without success:</b> averaging over frames, comparing only the path region. A retraining on such repeat views is queued.</li>
-      </ul></div>
+  <h2>Samples to judge by eye</h2>
+  <div class="keys" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+    <div class="key"><b>Left</b><span>the camera view at now with the sentence above; below it what the camera really showed 1, 2.5 and 5 s later.</span></div>
+    <div class="key"><b>Six plans</b><span>green goes through nothing, red goes through something. Dashed: what the person did. Light green is where people walked, red and black is blocked.</span></div>
+    <div class="key"><b>Other prompts</b><span>the same view with five other sentences, one path each.</span></div>
+    <div class="key"><b>Noise</b><span>six paths from full starting noise, and the one path without noise.</span></div>
   </div>
+  <p class="small">Twelve samples were drawn at random from four held-out homes; eight are shown, chosen to cover what goes well and what does not. Click a picture for full size.</p>
 
-  <h3>3 · Body</h3>
-  <div class="pair">
-    <div class="chart" data-chart="body">
-      <h4>Pelvis, distance from the recorded one</h4>
-      <p class="csub">Along a given head path, 755 held-out samples. Lower is better.</p>
-      <div class="rows"></div>
-    </div>
-    <div class="callout"><div class="h">Reading the chart</div>
-      <ul class="tight">
-        <li><b>The body follows the head path</b> to a few centimetres, also without knowing its own past.</li>
-        <li><b>It holds on generated head paths:</b> the head joint stays 12.7 cm from the planned camera, as for recorded bodies (13.5 cm).</li>
-        <li><b>No drift</b> when it continues from its own output for 5 s.</li>
-      </ul></div>
-  </div>
+  <h3>Goes well</h3>
+  <div class="card shot"><a href="img/gallery/card-00.jpg"><img src="img/gallery/card-00.jpg" alt="Towards the kitchen area: 6 of 6 plans clear" loading="lazy"></a>
+    <div class="cap"><div class="h">Towards the kitchen area: 6 of 6 plans clear</div><div class="p">The plans head where the person went, a little straighter. The other prompts fan out to the left, right and back from the same view.</div></div></div>
+  <div class="card shot"><a href="img/gallery/card-02.jpg"><img src="img/gallery/card-02.jpg" alt="Turns right into the dining area: 5 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">Turns right into the dining area: 5 of 6 clear</div><div class="p">The plans turn right through the opening as the person did. They then carry on straight where the person turned once more towards the kitchen: the second half of a long sentence is lost.</div></div></div>
+  <div class="card shot"><a href="img/gallery/card-01.jpg"><img src="img/gallery/card-01.jpg" alt="Out of the bathroom: 5 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">Out of the bathroom: 5 of 6 clear</div><div class="p">The plans leave the small room through its door and then spread, as the sentence leaves open where to. With full noise only 3 of 6 are clear.</div></div></div>
+  <div class="card shot"><a href="img/gallery/card-07.jpg"><img src="img/gallery/card-07.jpg" alt="A short move beside a sofa: 6 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">A short move beside a sofa: 6 of 6 clear</div><div class="p">The person moves about 1 m; the plans are equally short. Told to walk straight, left or right, the model walks 2 to 3 m instead.</div></div></div>
 
-  <h3>The chain, prompted</h3>
-  <div class="card" style="max-width: 1200px; margin-bottom: 1.4rem;"><video src="media/loc08-kitchen.mp4" controls preload="metadata"></video>
-    <div class="cap"><div class="h">"C walks to the kitchen."</div><div class="p">Left: what the models are given. Middle: the planned head path and the generated body in the home's scene. Right: the scene from the planned camera. This home was in the training set. The chain answers a prompt in 0.08 s on one RTX 3090 and runs interactively.</div></div></div>
+  <h3>Mixed, and failures</h3>
+  <div class="card shot"><a href="img/gallery/card-10.jpg"><img src="img/gallery/card-10.jpg" alt="Down a hallway: 3 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">Down a hallway: 3 of 6 clear</div><div class="p">All six follow the hallway as the person did. The red ones brush the corner of a wall by a few centimetres, which counts as going through something.</div></div></div>
+  <div class="card shot"><a href="img/gallery/card-05.jpg"><img src="img/gallery/card-05.jpg" alt="Wrong direction: 0 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">Wrong direction: 0 of 6 clear</div><div class="p">The person picks something up from a table, then walks to the hallway at the lower left. The plans head left across the room into space measured as blocked. The view at now shows only the table.</div></div></div>
+  <div class="card shot"><a href="img/gallery/card-09.jpg"><img src="img/gallery/card-09.jpg" alt="Beside a staircase: 0 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">Beside a staircase: 0 of 6 clear</div><div class="p">The plans curve towards the stairs. The map is flat and marks a staircase as blocked, so the count is not reliable here; but the person went the other way.</div></div></div>
+  <div class="card shot"><a href="img/gallery/card-03.jpg"><img src="img/gallery/card-03.jpg" alt="On the stairs: 1 of 6 clear" loading="lazy"></a>
+    <div class="cap"><div class="h">On the stairs: 1 of 6 clear</div><div class="p">The person is walking up the stairs. Same caveat: the flat map cannot say whether a path on a staircase is valid.</div></div></div>
 
-  <h2>Where it stands</h2>
+  <h2>What the samples show</h2>
   <div class="keys" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
-    <div class="key"><b>Works</b><span>The three parts fit together without adjustment. Text steers the path. The body follows a generated path as it follows a recorded one.</span></div>
-    <div class="key"><b>Weak</b><span>The planner stops short and reads the layout of an unseen home poorly, most likely because there are only 39 training homes.</span></div>
-    <div class="key"><b>Unproven</b><span>The comparator. It has only been shown other recorded frames, alarms too often on an unchanged place, and is not connected to the chain yet.</span></div>
+    <div class="key"><b>The text steers</b><span>In the samples shown, the five other prompts give clearly different paths from the same view: left, right, back, and a short one for "stands still".</span></div>
+    <div class="key"><b>It reads openings</b><span>Plans leave rooms through doors and follow hallways in homes the model never saw.</span></div>
+    <div class="key"><b>It follows the first clause</b><span>Long sentences with two turns are followed for the first turn only.</span></div>
+    <div class="key"><b>Margins are thin</b><span>Many failures are a corner clipped by centimetres, not a walk through furniture.</span></div>
+    <div class="key"><b>Less noise, fewer failures</b><span>Full noise spreads the paths into walls; without noise there is one cautious path.</span></div>
+    <div class="key"><b>The measure fails on stairs</b><span>A flat map marks staircases as blocked.</span></div>
   </div>
 
   <h2>Where your ideas would help most</h2>
   <div class="asks">
-    <div class="ask"><div class="n">1</div><div><div class="q">What should the central claim be?</div>
-      <div class="w">Head path and body work but are not new in kind. The comparator is the idea, and it is the least proven part. What result would make it a contribution?</div></div></div>
-    <div class="ask"><div class="n">2</div><div><div class="q">How can we test it on a scene that really changes?</div>
-      <div class="w">Recordings contain no unexpected changes. Routes we see: a renderer of one home (its image features differ strongly from real ones), real frames with an object edited into the path, or a robot.</div></div></div>
-    <div class="ask"><div class="n">3</div><div><div class="q">What should happen after a surprise?</div>
-      <div class="w">Today the plan is only a 5-second head path. Stop, replan from the new view, or something that reasons about what changed?</div></div></div>
-    <div class="ask"><div class="n">4</div><div><div class="q">Is a robot the goal, and through which route?</div>
-      <div class="w">The chain outputs human body motion along a planned path. It could feed a retargeting and tracking pipeline for a humanoid, or stay a study on human data.</div></div></div>
-    <div class="ask"><div class="n">5</div><div><div class="q">Which comparisons would a reviewer expect?</div>
-      <div class="w">Nothing has been compared with other methods yet, and the scoring against room maps is our own.</div></div></div>
+    <div class="ask"><div class="n">1</div><div><div class="q">Is this the right way to judge a head path?</div>
+      <div class="w">We score against a map of walked and measured space, not against the recorded path. It misjudges stairs, and a clipped corner counts like a walk through a table. Is there a better measure, or one a reviewer would expect?</div></div></div>
+    <div class="ask"><div class="n">2</div><div><div class="q">How should one plan be chosen from several?</div>
+      <div class="w">Among 8 draws one is nearly always clear (3.7 % fail), but a single draw fails in 17.5 %, and the model's own estimate of free space does not find the good one.</div></div></div>
+    <div class="ask"><div class="n">3</div><div><div class="q">Narration is not instruction. Does that matter?</div>
+      <div class="w">The training text describes what a person did, often with two actions and details about hands. At use, the prompt is a command. The model follows the first clause and ignores the rest.</div></div></div>
+    <div class="ask"><div class="n">4</div><div><div class="q">Is 39 training homes the limit, and what would lift it?</div>
+      <div class="w">On homes it trained on, the model estimates free distance to 0.28 m; on new homes to about 0.55 m. No image feature we tried changed that. A first test with homes from another dataset was not conclusive.</div></div></div>
+    <div class="ask"><div class="n">5</div><div><div class="q">What should the next stage build on?</div>
+      <div class="w">Replanning every 1 to 2 s already matches recorded paths (3.1 % against 2.9 %). Is that good enough to move on to the comparator and the body, or should the 5-second plan be solid first?</div></div></div>
   </div>
 </section>
 
