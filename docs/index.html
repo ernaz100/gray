@@ -153,13 +153,115 @@ ul.tight li { margin: .25rem 0; }
 <body>
 
 <header>
-  <h1>Gray</h1>
-  <div class="sub">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 23 November 2026.</div>
+  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 23 November 2026.</div>
   <nav id="tabs"></nav>
 </header>
 <main id="panels">
 
-<section data-tab="Overview" id="overview">
+<section data-tab="Summary" id="summary">
+  <p class="lead">One page for a first look: <b>what was decided, what the data is, what was trained, and how it performs</b>. All numbers are from five homes that no model saw in training, unless a row says otherwise.</p>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Trained so far</div><div class="value">3 models</div><div class="note">head path, comparator, body; each about 27 to 30 M parameters</div></div>
+    <div class="tile"><div class="label">Chained and running</div><div class="value">0.08 s</div><div class="note">per prompt for head path and body on one RTX 3090</div></div>
+    <div class="tile"><div class="label">Head path, first 2 s</div><div class="value">3.1 %</div><div class="note">go through something; recorded paths 2.9 %</div></div>
+    <div class="tile"><div class="label">Body along the path</div><div class="value">4.7 cm</div><div class="note">pelvis from the recorded one; simple guess 22 cm</div></div>
+    <div class="tile"><div class="label">Comparator, open problem</div><div class="value">13–16 %</div><div class="note">alarms when nothing changed; should be near 5 %</div></div>
+  </div>
+
+  <h2>Cornerstones</h2>
+  <table>
+    <tr><th>#</th><th>Decision</th><th>Why</th></tr>
+    <tr><td>1</td><td><b>Robot inputs only.</b> Camera image, text, own pose. No gaze, no map of the scene.</td><td>The target is a robot; anything else would have to be removed later.</td></tr>
+    <tr><td>2</td><td><b>Pinhole views, not the fisheye frames.</b> Every frame is cut to a 79.6 degree view before features are computed.</td><td>A robot camera is not a fisheye; features of the two differ (cosine 0.82).</td></tr>
+    <tr><td>3</td><td><b>Moments, not fixed windows.</b> A sample begins where a narration sentence begins.</td><td>The text then describes exactly the 5 s to be generated.</td></tr>
+    <tr><td>4</td><td><b>Indoor navigation only.</b> Standing around and outdoor walks are filtered out.</td><td>44,754 of 167,796 moments remain; the rest teaches little about moving through a room.</td></tr>
+    <tr><td>5</td><td><b>Judge a path without the recorded one.</b> Does it go when told, reach the named object, avoid what is there.</td><td>Many paths are valid for one sentence; distance to one of them says little.</td></tr>
+    <tr><td>6</td><td><b>The truth for collisions is walked and measured space,</b> not the annotated furniture boxes.</td><td>The boxes include space people walk through, so recorded paths scored as collisions.</td></tr>
+    <tr><td>7</td><td><b>Three separate models in a chain:</b> head path, then what the camera should show, then the body.</td><td>Each can be trained, tested and replaced on its own.</td></tr>
+    <tr><td>8</td><td><b>The room as a training target, never an input.</b> The head-path model must also say how far the way is free.</td><td>Makes it attend to obstacles without giving it a map.</td></tr>
+    <tr><td>9</td><td><b>Sample with few steps and little noise.</b></td><td>Halves the collisions of the head path and improves the body, at a fifth of the cost.</td></tr>
+    <tr><td>10</td><td><b>The comparator predicts its own uncertainty;</b> the signal is error divided by uncertainty.</td><td>A fast head turn changes the image a lot and should not raise an alarm.</td></tr>
+  </table>
+
+  <h2>Exactly how the data looks</h2>
+  <p><b>Source:</b> Nymeria. 1,074 recordings of people in 44 real homes wearing camera glasses and a motion-capture suit, 17.7 million frames at 15 per second, with a narration in sentences of about 5 seconds. 39 homes are for training, 5 are held out entirely.</p>
+  <svg class="diag" viewBox="0 0 1240 150" role="img" aria-label="One moment on a time axis">
+    <rect class="bx" x="40" y="40" width="320" height="56" rx="8"/>
+    <text x="200" y="64" text-anchor="middle">given: the 2 s before now</text>
+    <text class="d" x="200" y="82" text-anchor="middle">30 frames</text>
+    <rect class="bx prog" x="364" y="40" width="836" height="56" rx="8"/>
+    <text x="782" y="64" text-anchor="middle">generated: the 5 s the sentence describes</text>
+    <text class="d" x="782" y="82" text-anchor="middle">75 frames</text>
+    <line class="arrow" x1="362" y1="22" x2="362" y2="112"/>
+    <text class="lab" x="362" y="16" text-anchor="middle">now = where the sentence begins</text>
+    <text class="io" x="40" y="128">−2 s</text><text class="io" x="352" y="128">0</text><text class="io" x="1168" y="128">+5 s</text>
+  </svg>
+  <table>
+    <tr><th>Part of one moment</th><th>Shape</th><th>What it is</th><th>Used by</th></tr>
+    <tr><td><b>Head poses</b></td><td>105 × 9</td><td>camera position (x, height above floor, z) and rotation, per frame, in a frame anchored at now</td><td>all three; the 75 after now are what the head-path model generates</td></tr>
+    <tr><td><b>Image feature</b></td><td>30 × 384</td><td>one DINOv3 vector per past frame of the pinhole view</td><td>all three, as input</td></tr>
+    <tr><td><b>Image grid at now</b></td><td>49 × 384</td><td>the 7 × 7 patch features of the current frame</td><td>all three, as input</td></tr>
+    <tr><td><b>Text</b></td><td>≤ 77 × 768</td><td>CLIP token features of the narration sentence, e.g. "C walks to the kitchen counter."</td><td>all three, as input</td></tr>
+    <tr><td><b>Future image grid</b></td><td>15 × 49 × 64</td><td>the grid of every fifth frame after now, compressed to 64 numbers per cell</td><td>comparator, as target</td></tr>
+    <tr><td><b>Body</b></td><td>105 × 36</td><td>per frame a pose encoding (32 numbers, a motion autoencoder over SMPL joints) and the pelvis path and facing direction (4)</td><td>body model: past as input, future as target</td></tr>
+    <tr><td><b>Free distance</b></td><td>32</td><td>how far the way is free around the camera in 16 directions, from the map of walked and measured space</td><td>head-path model, as extra training target only</td></tr>
+  </table>
+  <div class="pair">
+    <div class="card"><img src="img/paths-0.jpg" alt="Three moments: camera view with sentence, and the map with paths" loading="lazy">
+      <div class="cap"><div class="h">Three moments as the model meets them</div><div class="p">Left: the pinhole view at now with its sentence. Right: the home from above with the 2 s before (grey), the recorded 5 s (dashed) and generated paths (colour). The map is for scoring only.</div><div class="f">runs/head-v5/show</div></div></div>
+    <div class="card"><img src="img/ground-loc08.jpg" alt="Free and blocked space of one home" loading="lazy">
+      <div class="cap"><div class="h">The truth for "goes through something"</div><div class="p">Per home, from all its recordings: green where somebody walked, black and red for walls and what the glasses measured in at least 30 % of the recordings, white unknown.</div><div class="f">gray/ground.py · Loc_08</div></div></div>
+  </div>
+
+  <h2>What was trained</h2>
+  <table>
+    <tr><th>Model</th><th>Kind</th><th>Size</th><th>Trained on</th><th>Training</th><th>Given → produces</th></tr>
+    <tr><td><b>Head path</b><br><span class="small">head-v5</span></td><td>flow model, transformer, one token per frame</td><td class="num">26.7 M</td><td>39,130 navigation moments</td><td>40,000 steps, batch 128, about 2 h on one GPU</td><td>past, text, image grid → head poses of the next 5 s</td></tr>
+    <tr><td><b>Comparator</b><br><span class="small">compare-v3</span></td><td>transformer, one pass, predicts mean and variance</td><td class="num">29.5 M</td><td>150,295 moments (all indoor, not only navigation)</td><td>20,000 steps, about 3 h</td><td>past, text, head poses of the next 5 s → the image grid along them, with uncertainty</td></tr>
+    <tr><td><b>Body</b><br><span class="small">motion-v1</span></td><td>flow model, same build as the head path</td><td class="num">26.7 M</td><td>39,130 navigation moments (body known in 99 %)</td><td>40,000 steps, about 2.5 h</td><td>past incl. own body, text, head poses of the next 5 s → body for those 5 s</td></tr>
+  </table>
+  <p class="small">Image features (DINOv3 ViT-S/16), text features (CLIP ViT-L/14) and the motion autoencoder (MoLingo) are used as released and not trained here. Earlier runs (head-v1 to v4, v6, compare-v1 and v2, the first joint model) are in the other tabs and in DESIGN.md.</p>
+
+  <h2>How it performs</h2>
+  <table>
+    <tr><th>Model</th><th>Measure</th><th>Result</th><th>Reference</th></tr>
+    <tr><td rowspan="5"><b>Head path</b></td><td>Goes when the sentence mentions walking</td><td class="num">85.5 %</td><td>people: 92.0 %</td></tr>
+    <tr><td>Goes when it does not</td><td class="num">12.3 %</td><td>people: 15.9 %</td></tr>
+    <tr><td>Ends within 1 m of the object the sentence names</td><td class="num">61 %</td><td>with the wrong sentence: 25 %</td></tr>
+    <tr><td>Goes through something, first 2 s</td><td class="num">3.1 %</td><td>recorded paths: 2.9 %</td></tr>
+    <tr><td>Goes through something, full 5 s</td><td class="num">17.5 %</td><td>recorded: 7.3 %; turned by 90°: 71.3 %</td></tr>
+    <tr><td rowspan="4"><b>Comparator</b></td><td>Prediction error of the image grid</td><td class="num">0.53</td><td>assuming the image stays: 1.16</td></tr>
+    <tr><td>Surprise on true frames (should be 1)</td><td class="num">1.08</td><td>stays 1.1 while the head turns</td></tr>
+    <tr><td>Alarm 1 s ahead, shown a different scene</td><td class="num">91 %</td><td>threshold set so true frames alarm in 5 %</td></tr>
+    <tr><td>Alarm 1 s ahead, same place seen again, nothing changed</td><td class="num">13–16 %</td><td>should be near 5 %</td></tr>
+    <tr><td rowspan="4"><b>Body</b></td><td>Pelvis from the recorded one, along the recorded head path</td><td class="num">4.7 cm</td><td>straight under the camera: 22 cm</td></tr>
+    <tr><td>The same without knowing its own past</td><td class="num">6.0 cm</td><td></td></tr>
+    <tr><td>Head joint to camera, along a generated head path</td><td class="num">12.7 cm</td><td>recorded bodies: 13.5 cm</td></tr>
+    <tr><td>Drift when continuing from its own output for 5 s</td><td class="num">none</td><td>3.6 to 5.6 cm, as when generated at once</td></tr>
+  </table>
+
+  <div class="pair">
+    <div class="card"><video src="media/loc08-hallway.mp4" controls preload="metadata"></video>
+      <div class="cap"><div class="h">The chain, prompted: "C walks down the hallway to the bedroom."</div><div class="p">Head path from head-v5, body from motion-v1, at a spot in one home (a home from training). The same runs interactively on a workstation: click a spot, type a prompt, the figure moves.</div><div class="f">gray/scene_worker.py</div></div></div>
+    <div>
+      <div class="callout"><div class="h">Where it stands, in three sentences</div>
+        <ul class="tight">
+          <li><b>Works:</b> the three parts fit together without adjustment; text steers the path; the body follows a generated path as it follows a recorded one.</li>
+          <li><b>Weak:</b> the planner stops short and reads the layout of an unseen home poorly, most likely because there are only 39 training homes.</li>
+          <li><b>Unproven:</b> the comparator, the part the project is named after. It has only been shown other recorded frames, alarms too often on an unchanged place, and is not connected to the chain yet.</li>
+        </ul></div>
+      <div class="callout"><div class="h">Questions worth discussing</div>
+        <ul class="tight">
+          <li>How to test the comparator on a scene that really changes: a renderer (image features differ strongly from real ones) or a robot?</li>
+          <li>More homes for reading rooms: which dataset, given that a first try with another camera rig transferred poorly?</li>
+          <li>Which robot and camera to aim at; the Unitree G1's camera looks steeply down.</li>
+        </ul></div>
+    </div>
+  </div>
+</section>
+
+<section data-tab="Overview" id="overview" hidden>
   <p class="lead">A system that takes what a head camera sees and a text prompt, generates motion that works in the scene, and <b>notices when the world differs from what it expected</b>. The aim is a closed loop that can be put into a scene and prompted around. The name is after Jeffrey Gray's comparator: predict what the senses will report next, compare, and interrupt the running plan on a mismatch.</p>
 
   <div class="tiles">
@@ -555,6 +657,7 @@ document.addEventListener('keydown', e => {
 });
 const initial = sections.findIndex(s => '#' + s.id === location.hash);
 select(initial >= 0 ? initial : 0, false);
+window.addEventListener('load', () => window.scrollTo(0, 0));  // a link to a tab must not scroll its first lines under the header
 
 const head = [
   ["head-v3: moments", 40.8, "Dest. reached 53.7 %"],
