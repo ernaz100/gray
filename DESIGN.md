@@ -1393,7 +1393,9 @@ comparison with EgoPriMo and UniEgoMotion. `BACKLOG.md` holds the open tasks.
 The 272-number representation at 30 frames per second (Hugging Face `royrhea/272-dim-HumanML3D`,
 8.4 GB, Apache-2.0, academic use under the AMASS licence): 26,682 motions of 2 to 10 s, half of
 them mirrored copies, 54.9 h. Encoded with the same autoencoder as Nymeria's bodies (it was
-trained on this data): latents of size 2.2, as Nymeria's.
+trained on this data): latents of size 2.6, in the range of Nymeria's (2.2 to 2.8). The camera made
+for it is 1.54 m above the floor (median) and looks 19 degrees below level, at the low end of
+what Nymeria's camera does.
 
 HumanML3D has no camera. A camera pose per frame is made from the head joint and one fixed
 transform: the average of how Nymeria's camera sits on the head joint, measured on 43,920 frames
