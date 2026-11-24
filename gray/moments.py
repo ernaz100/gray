@@ -205,6 +205,7 @@ class Moments(Dataset):
         if self.future:
             out["target"] = tensor(np.stack([a["image"][int(f)] for f in self.maybe_again(a, np.arange(now + 1, now + FUTURE + 1))]) if self.revisits is not None
                                    else a["image"][now + 1 : now + FUTURE + 1])
+        out["foreign"], out["history_max"] = torch.tensor(False), torch.tensor(HISTORY)  # see gray/hml.py: samples without images or a real camera
         if self.body is not None:
             b, span = a["body"], slice(now - HISTORY + 1, now + FUTURE + 1)
             out["body"] = tensor(np.concatenate([b["latent"][span], b["pelvis"][span][:, [0, 2]], np.sin(b["yaw"][span])[:, None], np.cos(b["yaw"][span])[:, None]], axis=1))

@@ -45,6 +45,46 @@ CHAIN = [0, 3, 6, 9, 12, 15]  # pelvis to head in the SMPL tree
 TOKENS = 105  # a moment: 30 frames given, 75 generated
 
 
+class HmlMoments(torch.utils.data.Dataset):
+    """HumanML3D motions as samples shaped like the moments of gray/moments.py with a body, for training next to them.
+
+    A sample is a stretch of one motion: up to 30 frames before "now" (fewer if the motion begins later; "history_max" says
+    how many are real) and the 75 after it. "image" and "patches" are zeros and "foreign" is True: the models put a learned
+    token in place of the image, and may do the same for the head path, which here is made from the head joint and is not
+    a real camera's. The text is one of the motion's captions, chosen at random. Only motions of the training split that
+    are 5.1 s or longer and whose pelvis gets ``reach`` metres or further from its start are used.
+    """
+
+    def __init__(self, folder: Path, reach: float = 1.0) -> None:
+        d = np.load(folder / "hml.npz")
+        self.latent, self.pose, self.pelvis, self.yaw, start = d["latent"], d["pose"], d["pelvis"], d["yaw"], d["start"]
+        self.index = json.loads((folder / "text_index.json").read_text())
+        self.tokens = np.load(folder / "text_tokens.npy", mmap_mode="r")
+        train = set((folder / "split" / "train.txt").read_text().split())
+        self.samples, self.motions = [], 0
+        for name, a, b in zip(d["names"], start[:-1], start[1:]):
+            name = str(name)
+            far = np.hypot(*(self.pelvis[a:b, [0, 2]] - self.pelvis[a, [0, 2]]).T).max()
+            if b - a < 76 or far < reach or not self.index.get(name) or name.lstrip("M") not in train:
+                continue
+            self.motions += 1
+            self.samples += [(name, int(a), int(b), int(s)) for s in range(0, b - a - 76 + 1, 15)]
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+        name, a, b, s = self.samples[index]
+        now = a + min(s + int(torch.randint(0, 15, (1,))), b - a - 76)  # the frame at now; 75 frames follow it
+        rows = np.clip(np.arange(now - 29, now + 76), a, b - 1)  # frames before the motion begins repeat its first one; they are not shown
+        own = np.concatenate([self.latent[rows], self.pelvis[rows][:, [0, 2]], np.sin(self.yaw[rows])[:, None], np.cos(self.yaw[rows])[:, None]], axis=1)
+        first, last = self.index[name][int(torch.randint(0, len(self.index[name]), (1,)))]
+        return {"pose": torch.from_numpy(self.pose[rows].copy()), "image": torch.zeros(30, 384), "patches": torch.zeros(49, 384),
+                "text": torch.from_numpy(np.array(self.tokens[first:last], dtype=np.float32)), "row": torch.tensor(-1), "now": torch.tensor(now - a),
+                "body": torch.from_numpy(own.astype(np.float32)), "body_known": torch.tensor(True), "foreign": torch.tensor(True),
+                "history_max": torch.tensor(min(now - a + 1, 30))}
+
+
 def tools(steer: Path, device: str):
     sys.path.insert(0, str(steer))
     from data.nymeria import to_actionplan as ap

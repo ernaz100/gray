@@ -16,13 +16,17 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
       On the workstation in `gray/local/data/hml3d/`; the archives are also on Viper in `/ptmp/enazaren/hml3d`.
 - [ ] **A HumanML3D subset.** Counts are in (`gray/hml.py census`); the rule is to be chosen with the user.
 - [x] Text features of the HumanML3D captions: 57,052 captions of 19,848 motions (`hml3d/text_tokens.npy`, 1.5 GB).
-- [ ] **Samples from HumanML3D in the loaders**, with a "no image" token, so that `motion.py` and `head.py`
-      can train on a mixture.
+- [x] HumanML3D samples in the loader (`gray/hml.py: HmlMoments`): 27,192 samples of 7,498 motions of the training
+      split; the body model takes a "no image" token for them and, by choice, a "no head path" token.
+- [x] Two foot measures that need no recorded motion (`gray/chain.py: feet`): sliding while a toe is down, and how
+      high the lower toe is above the clip's lowest point.
 
 ## Next
 
-- [ ] **Mixed training.** Body model, and separately the head path, on Nymeria plus the subset;
-      compare with the Nymeria-only runs on the held-out homes.
+- [ ] **Mixed training of the body model.** 30 % of the samples from HumanML3D. `motion-v2`: their head path masked;
+      `motion-v3`: their head path given. Compare with `motion-v1` on the held-out homes, with the checks of
+      `gray/chain.py` including the foot measures. Not yet: a variant with the head path roughened; the head-path model
+      (not trained on HumanML3D for now, since its made-up head paths would be targets there).
 - [ ] **Rejection sampling into real scenes.** Place a HumanML3D motion at a recorded starting frame
       in a Nymeria home; keep it if its path goes through nothing on that home's map. Train with
       these as extra samples that have a real image.
@@ -53,7 +57,8 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 
 ## Running
 
-Nothing.
+- `motion-v2` (jobs 13656547 to 13656550, checks 13656551) and `motion-v3` (13656552 to 13656555, checks 13656556) on Viper.
+- The checks with the foot measures for `motion-v1` (13656546).
 
 ## Parked
 

@@ -21,6 +21,11 @@ Everything is in the frame anchored at now (gray/frames.py) and standardized.
 It is a flow model that predicts the clean value, built like gray/head.py: a noise level between 0
 and 1 per sample, the future body mixed with noise accordingly, squared error to the clean body.
 
+``--hml`` mixes in HumanML3D motions (gray/hml.py), which have text and a body but no images and no real camera: a learned
+token stands in for the image, and (``--hml-path masked``, the default) for the head path too, so that these samples teach
+what motion looks like without teaching that a head path fixes the body exactly, as it does when the "camera" is glued to
+the head joint. Scores are on Nymeria's held-out homes as before.
+
 Moments whose body is not fully known (no motion capture in part of the 7 s) are left out of
 the loss and of the scores.
 
@@ -67,6 +72,8 @@ class Body(nn.Module):
         self.pose_in = nn.Linear(9, width)
         self.body_in = nn.Linear(BODY, width)
         self.no_body = nn.Parameter(torch.randn(width) * 0.02)
+        self.no_image = nn.Parameter(torch.randn(width) * 0.02)  # for samples without images (gray/hml.py)
+        self.no_path = nn.Parameter(torch.randn(width) * 0.02)  # for samples whose head path is withheld
         self.image_in = nn.Sequential(nn.LayerNorm(image_dim), nn.Linear(image_dim, width))
         self.time_in = nn.Linear(width, width)
         self.level_in = nn.Sequential(nn.Linear(256, width), nn.SiLU(), nn.Linear(width, width))
@@ -81,15 +88,21 @@ class Body(nn.Module):
         self.out = nn.Sequential(nn.LayerNorm(width), nn.Linear(width, BODY))
 
     def forward(self, head: torch.Tensor, image: torch.Tensor, seen: torch.Tensor, past: torch.Tensor, warm: torch.Tensor, x: torch.Tensor,
-                level: torch.Tensor, text: torch.Tensor, text_valid: torch.Tensor, patches: torch.Tensor | None = None) -> torch.Tensor:
+                level: torch.Tensor, text: torch.Tensor, text_valid: torch.Tensor, patches: torch.Tensor | None = None,
+                no_image: torch.Tensor | None = None, no_path: torch.Tensor | None = None) -> torch.Tensor:
         """head (B, 105, 9), image (B, 30, 384), seen (B, 30) which past frames are given, past (B, 30, 36) the body in them,
-        warm (B,) whether that body is given, x (B, 75, 36) the noised future body, level (B,) -> the clean future body (B, 75, 36)."""
+        warm (B,) whether that body is given, x (B, 75, 36) the noised future body, level (B,) -> the clean future body (B, 75, 36).
+        no_image (B,): the sample has no images; no_path (B,): its head path is withheld. Both default to False."""
         size, device = head.shape[0], head.device
         seconds = (torch.arange(HISTORY + FUTURE, device=device) - NOW) / RATE
         clock = self.time_in(time_embedding(seconds[None], self.width))
         own = torch.where(warm[:, None, None], self.body_in(past), self.no_body)
-        before = self.pose_in(head[:, :HISTORY]) + self.image_in(image) + own + clock[:, :HISTORY] + self.kind[0]
-        after = self.pose_in(head[:, HISTORY:]) + self.body_in(x) + clock[:, HISTORY:] + self.kind[1] + self.level_in(level_embedding(level))[:, None]
+        blind = torch.zeros(size, dtype=torch.bool, device=device) if no_image is None else no_image
+        lost = torch.zeros(size, dtype=torch.bool, device=device) if no_path is None else no_path
+        where = torch.where(lost[:, None, None], self.no_path, self.pose_in(head))
+        picture = torch.where(blind[:, None, None], self.no_image, self.image_in(image))
+        before = where[:, :HISTORY] + picture + own + clock[:, :HISTORY] + self.kind[0]
+        after = where[:, HISTORY:] + self.body_in(x) + clock[:, HISTORY:] + self.kind[1] + self.level_in(level_embedding(level))[:, None]
         has_text = text_valid.any(dim=1)
         words = torch.where(has_text[:, None, None], self.text_in(text) + self.kind[2], self.no_text)
         valid = torch.where(has_text[:, None], text_valid, torch.arange(text.shape[1], device=device)[None] == 0)
@@ -97,7 +110,7 @@ class Body(nn.Module):
         padding = [~seen, torch.zeros(size, FUTURE, dtype=torch.bool, device=device), ~valid]
         if hasattr(self, "patch_in"):
             sequence.append((self.patch_in(patches) + self.patch_where + self.kind[3]).to(before.dtype))
-            padding.append(torch.zeros(sequence[-1].shape[:2], dtype=torch.bool, device=device))
+            padding.append(blind[:, None].expand(-1, sequence[-1].shape[1]))  # no image, no image grid
         hidden = self.blocks(torch.cat(sequence, dim=1), src_key_padding_mask=torch.cat(padding, dim=1))
         return self.out(hidden[:, HISTORY : HISTORY + FUTURE])
 
@@ -119,17 +132,21 @@ def inputs(batch: dict, stats: dict, history: torch.Tensor | int = HISTORY):
 
 
 def flow_loss(model: Body, batch: dict, stats: dict, text_drop: float = 0.0, cold: float = 0.0, random_history: bool = True,
-              generator: torch.Generator | None = None, amp: bool = False) -> torch.Tensor:
+              generator: torch.Generator | None = None, amp: bool = False, hide_path: bool = True) -> torch.Tensor:
+    """``hide_path``: samples without a real camera (HumanML3D) are given a token in place of their head path."""
     size, device = batch["pose"].shape[0], batch["pose"].device
     draw = lambda *shape: torch.rand(*shape, generator=generator, device=device)  # noqa: E731
-    history = (draw(size) * HISTORY).long() + 1 if random_history else HISTORY
+    history = (draw(size) * HISTORY).long() + 1 if random_history else torch.full((size,), HISTORY, device=device)
+    foreign = batch["foreign"] if "foreign" in batch else torch.zeros(size, dtype=torch.bool, device=device)
+    if "history_max" in batch:
+        history = torch.minimum(history, batch["history_max"])
     head, image, seen, past, future, text, text_valid, patches = inputs(batch, stats, history)
     text_valid = text_valid & (draw(size) >= text_drop)[:, None]
     warm = draw(size) >= cold
     level = draw(size)
     mixed = (1 - level[:, None, None]) * torch.randn(future.shape, generator=generator, device=device) + level[:, None, None] * future
     with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp):
-        clean = model(head, image, seen, past, warm, mixed, level, text, text_valid, patches)
+        clean = model(head, image, seen, past, warm, mixed, level, text, text_valid, patches, no_image=foreign, no_path=foreign & hide_path)
     error = ((clean.float() - future) ** 2).mean((1, 2))
     known = batch["body_known"].float()
     return (error * known).sum() / known.sum().clamp_min(1)
@@ -190,7 +207,7 @@ def load(folder: Path, device: str, best: bool = True) -> tuple[Body, dict, dict
     saved = torch.load(path, map_location=device)
     config = saved["config"]
     model = Body(config["width"], config["layers"], config["heads"], patches=config.get("patches") not in (None, "None")).to(device)
-    model.load_state_dict(saved["model"])
+    model.load_state_dict(saved["model"], strict=False)  # runs from before the tokens for missing images and paths lack them
     return model.eval(), {key: value.to(device) for key, value in saved["stats"].items()}, config
 
 
@@ -204,6 +221,10 @@ def main() -> None:
     parser.add_argument("--everything", action="store_true", help="train on all moments, not only the navigation subset")
     parser.add_argument("--wide", type=int, default=None, help="with --everything: move now by up to this many frames either way")
     parser.add_argument("--cold", type=float, default=0.3, help="share of training samples without the past body")
+    parser.add_argument("--hml", type=Path, default=None, help="folder of gray/hml.py: also train on HumanML3D motions (no images; text and body)")
+    parser.add_argument("--hml-share", type=float, default=0.3, help="share of the training samples drawn from HumanML3D")
+    parser.add_argument("--hml-path", choices=("masked", "given"), default="masked",
+                        help="masked: HumanML3D samples get a token in place of their head path, which is made from the head joint; given: they get that path")
     parser.add_argument("--cache", type=Path, default=CACHE)
     parser.add_argument("--save-dir", type=Path)
     parser.add_argument("--resume", action="store_true")
@@ -269,12 +290,21 @@ def main() -> None:
         args.save_dir.mkdir(parents=True, exist_ok=True)
         (args.save_dir / "config.json").write_text(json.dumps(config, indent=1))
 
-    loader = DataLoader(training, shuffle=True, drop_last=True, **options)
+    if args.hml is not None:
+        from gray.hml import HmlMoments
+
+        other = HmlMoments(args.hml)
+        weights = torch.cat([torch.full((len(training),), (1 - args.hml_share) / len(training)), torch.full((len(other),), args.hml_share / len(other))])
+        print(f"also {len(other):,d} samples of {other.motions:,d} HumanML3D motions, drawn for {args.hml_share:.0%} of the training samples; their head path is {args.hml_path}", flush=True)
+        sampler = torch.utils.data.WeightedRandomSampler(weights.double(), num_samples=len(training), replacement=True)
+        loader = DataLoader(torch.utils.data.ConcatDataset([training, other]), sampler=sampler, drop_last=True, **options)
+    else:
+        loader = DataLoader(training, shuffle=True, drop_last=True, **options)
     running, started = [], time.time()
     model.train()
     while step < args.steps:
         for batch in loader:
-            loss = flow_loss(model, to_device(batch, device), stats, args.text_drop, args.cold, amp=amp)
+            loss = flow_loss(model, to_device(batch, device), stats, args.text_drop, args.cold, amp=amp, hide_path=args.hml_path == "masked")
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)

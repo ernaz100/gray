@@ -70,6 +70,26 @@ class Decoder:
         return turned[:, ::2]
 
 
+TOES = [10, 11]
+
+
+def feet(joints: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Two measures of a body's feet that need no recorded motion, from joints (B, T, 22, 3) at 15 per second, each (B,):
+
+    slide   how fast a toe moves over the ground while it is down: within 5 cm of its lowest height in the clip (cm/s;
+            as foot_slide in STEER's egoprimo/evaluate.py)
+    hover   how high the lower of the two toes is above the lowest point either reaches in the clip, on average (cm):
+            large if the body floats or both feet leave the ground
+    """
+    toes = joints[:, :, TOES]  # (B, T, 2, 3)
+    low = toes[..., 1].amin(dim=1, keepdim=True)
+    down = (toes[..., 1] - low < 0.05)[:, 1:]
+    speed = (toes[:, 1:, :, [0, 2]] - toes[:, :-1, :, [0, 2]]).norm(dim=-1) * 15 * 100
+    slide = (speed * down).sum((1, 2)) / down.sum((1, 2)).clamp_min(1)
+    hover = (toes[..., 1].amin(dim=2) - toes[..., 1].amin(dim=(1, 2))[:, None]).mean(1) * 100
+    return slide, hover
+
+
 def to_ground(channels: torch.Tensor, here: torch.Tensor) -> torch.Tensor:
     """A root path (B, T, 4) in the frame anchored at the pose ``here`` (B, 9) -> the track's ground frame (the inverse of frames.anchor_root)."""
     yaw = frames.heading(here[:, 3:])
@@ -116,17 +136,23 @@ def main() -> None:
     truth = motion.body_anchored(batch)
     past = truth[:, :HISTORY]
 
+    def skeleton(body: torch.Tensor, before: torch.Tensor = past) -> torch.Tensor:
+        """The decoded joints (B, 75, 22, 3); the decoder is given the past body for context."""
+        return decoder.joints(torch.cat([before, body], dim=1))[:, HISTORY:]
+
     def to_camera(body: torch.Tensor, along: torch.Tensor, before: torch.Tensor = past) -> torch.Tensor:
-        """Distance (B, 75) in cm from the decoded head joint to the camera; the decoder is given the past body for context."""
-        joints = decoder.joints(torch.cat([before, body], dim=1))[:, HISTORY:, HEAD_JOINT]
-        return (joints - along[:, HISTORY:, :3]).norm(dim=-1) * 100
+        """Distance (B, 75) in cm from the decoded head joint to the camera."""
+        return (skeleton(body, before)[:, :, HEAD_JOINT] - along[:, HISTORY:, :3]).norm(dim=-1) * 100
 
     per_second = lambda values: " ".join(f"{values[:, s : s + SECOND].mean().item():6.1f}" for s in range(0, FUTURE, SECOND))  # noqa: E731
     results = {}
     reference = to_camera(truth[:, HISTORY:], path)
-    print(f"\nrecorded body: head joint {reference.mean().item():.1f} cm from the camera; the body faces {facing_gap(truth[:, HISTORY:], path[:, HISTORY:]).mean().item():.1f} degrees away from where the camera looks")
+    true_slide, true_hover = feet(skeleton(truth[:, HISTORY:]))
+    results["recorded"] = {"head_to_camera_cm": reference.mean().item(), "foot_slide_cm_s": true_slide.mean().item(), "foot_hover_cm": true_hover.mean().item()}
+    print(f"\nrecorded body: toes slide {true_slide.mean().item():.1f} cm/s while down, the lower toe is {true_hover.mean().item():.1f} cm above the clip's lowest point on average")
+    print(f"recorded body: head joint {reference.mean().item():.1f} cm from the camera; the body faces {facing_gap(truth[:, HISTORY:], path[:, HISTORY:]).mean().item():.1f} degrees away from where the camera looks")
 
-    print("\n1. Sampling, along the recorded head path\n   steps  noise  past body | pelvis cm   yaw deg   latent   head joint to camera cm")
+    print("\n1. Sampling, along the recorded head path\n   steps  noise  past body | pelvis cm   yaw deg   latent   head joint to camera cm   toes slide cm/s   lower toe above lowest cm")
     for steps, temperature in ((20, 1.0), (4, 1.0), (4, 0.5), (4, 0.3), (4, 0.0), (1, 0.0)):
         for warm in (True, False):
             drawn = motion.sample(model, batch, stats, steps, generator, amp, warm, temperature)
@@ -135,8 +161,10 @@ def main() -> None:
                    "yaw_deg": torch.rad2deg(torch.atan2(torch.sin(turn), torch.cos(turn)).abs()).mean().item(),
                    "latent": (((drawn[..., :32] - truth[:, HISTORY:, :32]) / stats["body_std"][:32]) ** 2).mean().sqrt().item(),
                    "head_to_camera_cm": to_camera(drawn, path).mean().item()}
+            slide, hover = feet(skeleton(drawn))
+            row |= {"foot_slide_cm_s": slide.mean().item(), "foot_hover_cm": hover.mean().item()}
             results[f"sampling steps {steps} noise {temperature} {'warm' if warm else 'cold'}"] = row
-            print(f"   {steps:5d}  {temperature:5.1f}  {'yes' if warm else 'no ':9s} | {row['pelvis_cm']:9.1f} {row['yaw_deg']:9.1f} {row['latent']:8.2f} {row['head_to_camera_cm']:10.1f}", flush=True)
+            print(f"   {steps:5d}  {temperature:5.1f}  {'yes' if warm else 'no ':9s} | {row['pelvis_cm']:9.1f} {row['yaw_deg']:9.1f} {row['latent']:8.2f} {row['head_to_camera_cm']:10.1f} {row['foot_slide_cm_s']:20.1f} {row['foot_hover_cm']:18.1f}", flush=True)
 
     print("\n2. The chain: head path from the head-path model (4 steps, half the noise), body along it (4 steps, noise 0.3)")
     planned = torch.cat([path[:, :HISTORY], head.sample(planner, batch, head_mean, head_std, 4, generator, amp, temperature=0.5, poses=True)], dim=1)
@@ -145,7 +173,10 @@ def main() -> None:
         drawn = motion.sample(model, batch, stats, 4, generator, amp, True, 0.3, head=along)
         gap, facing = to_camera(drawn, along), facing_gap(drawn, along[:, HISTORY:])
         offset = torch.hypot(drawn[..., 32] - along[:, HISTORY:, 0], drawn[..., 33] - along[:, HISTORY:, 2]) * 100
-        results[f"chain {label}"] = {"head_to_camera_cm": gap.mean().item(), "facing_deg": facing.mean().item(), "pelvis_from_under_camera_cm": offset.mean().item()}
+        slide, hover = feet(skeleton(drawn))
+        results[f"chain {label}"] = {"head_to_camera_cm": gap.mean().item(), "facing_deg": facing.mean().item(), "pelvis_from_under_camera_cm": offset.mean().item(),
+                                     "foot_slide_cm_s": slide.mean().item(), "foot_hover_cm": hover.mean().item()}
+        print(f"   {label:20s} toes slide {slide.mean().item():.1f} cm/s while down; lower toe {hover.mean().item():.1f} cm above the lowest point")
         print(f"   {label:20s} head joint to camera cm: {per_second(gap)}\n   {'':20s} body facing against camera, degrees: {per_second(facing)}\n   {'':20s} pelvis from under the camera, cm: {per_second(offset)}", flush=True)
     print(f"   {'recorded body':20s} head joint to camera cm: {per_second(reference)}\n   {'':20s} body facing against camera, degrees: {per_second(facing_gap(truth[:, HISTORY:], path[:, HISTORY:]))}\n"
           f"   {'':20s} pelvis from under the camera, cm: {per_second(torch.hypot(truth[:, HISTORY:, 32] - path[:, HISTORY:, 0], truth[:, HISTORY:, 33] - path[:, HISTORY:, 2]) * 100)}")
