@@ -236,10 +236,15 @@ ul.tight li { margin: .25rem 0; }
     </div>
     <div class="chart" data-chart="headref">
       <h4>Against people, final setting</h4>
-      <p class="csub">Blue: the model. Orange: recorded paths, or the model with the wrong sentence.</p>
-      <div class="clegend"><span>model</span><span class="s2">reference</span></div>
+      <p class="csub">The same measure for the model's paths and for the recorded paths of people.</p>
+      <div class="clegend"><span>model</span><span class="s2">people (recorded paths)</span></div>
       <div class="rows"></div>
     </div>
+  </div>
+  <div class="chart" data-chart="dest" style="max-width: 760px;">
+    <h4>Ends within 1 m of the object the sentence names</h4>
+    <p class="csub">58 held-out samples in which the sentence names an object on the map, the person starts 1.5 m or further from it and ends within 1 m of it. A small test.</p>
+    <div class="rows"></div>
   </div>
   <p class="small"><b>Tried:</b> adding the image grid, the free distance as an extra training target, estimated depth as input (no gain), text guidance (no gain), explorative training (worse). The largest gain came from sampling with fewer steps and less starting noise, without retraining.</p>
 
@@ -738,10 +743,14 @@ paired("alarm", alarm, 100, " %", "one vector", "image grid");
 paired("headref", [
   ["Goes when the sentence mentions walking", 85.5, 92.0, "people"],
   ["Goes when it does not", 12.3, 15.9, "people"],
-  ["Ends within 1 m of the named object", 61, 25, "wrong sentence"],
   ["Through something, first 2 s", 3.1, 2.9, "recorded paths"],
   ["Through something, full 5 s", 17.5, 7.3, "recorded paths"],
-], 100, " %", "model", "reference");
+], 100, " %", "model", "people");
+single("dest", [
+  ["The person (all, by how the test is built)", 100, "the test only counts samples in which the person reached the object"],
+  ["Model, given the recorded sentence", 61, ""],
+  ["Model, given another sample's sentence", 25, "what is reached by chance"],
+], 115, " %", null, "");
 single("body", [
   ["Simple guess: straight under the camera", 22.2, ""],
   ["Model, 20 sampling steps", 5.7, ""],
