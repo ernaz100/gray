@@ -25,20 +25,24 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 - [ ] **Rejection sampling into real scenes.** Place a HumanML3D motion at a recorded starting frame
       in a Nymeria home; keep it if its path goes through nothing on that home's map. Train with
       these as extra samples that have a real image.
-- [ ] **EgoPriMo as a baseline.** The earlier reimplementation trained on all of Nymeria exists
-      (`/ptmp/enazaren/nymeria/ego_runs/egoprimo/all-medium-v1`, 500,000 steps, same held-out homes;
-      generation: joints 70.8 cm on 8 s clips). Score it with our measures on the same starting frames.
-- [ ] **UniEgoMotion as a baseline,** retrained on Nymeria with our split. Code is public; it uses
-      another body model and its own environment. Not started.
+- [ ] **EgoPriMo as a baseline** (user, 24 Nov: compare on the first 5 s). The earlier reimplementation trained on all
+      of Nymeria exists (`/ptmp/enazaren/nymeria/ego_runs/egoprimo/all-medium-v1`, 500,000 steps, same held-out homes;
+      generation: joints 70.8 cm on 8 s clips). Score both on the same held-out starting frames, from one given frame and
+      the text, cut to 5 s. Open: it was trained with all sentences that overlap an 8 s window, ours with one sentence
+      per 5 s; how to make that fair (same text for both, or retrain it on moments).
+- [ ] **UniEgoMotion as a baseline** (user, 24 Nov: take it as released, and train a version of ours on the data it
+      uses). Needs: its released weights and code; EE4D-Motion (on the MPI cluster under `/scratch/inf0/user/enazaren/ee4d`)
+      brought into our form (body latents, head path, image features); a run of our chain on it. EE4D-Motion has
+      no captions, so this comparison is without text. Not started; the MPI cluster is not connected.
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
       and whether the feet are on the floor.
 
-## Waiting on a decision
+## Decided
 
-- [ ] What "our model" is in the comparison: the chain (head path, then body) against models that
-      generate the body directly. Assumed so far.
-- [ ] Clip length: score everyone on the first 5 s, or retrain ours for 8 s.
-- [ ] Whether UniEgoMotion is retrained now or after the EgoPriMo comparison.
+- The comparison is our chain (head path, then body) against models that generate the body directly.
+- Clip length: everyone is scored on the first 5 s.
+- UniEgoMotion is used as released; ours is trained on its data.
+- HumanML3D subset: 5.1 s or longer and the pelvis gets 1 m or further (33,824 samples), unless the user says otherwise.
 
 ## Running
 
