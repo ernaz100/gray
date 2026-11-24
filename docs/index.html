@@ -179,8 +179,8 @@ ul.tight li { margin: .25rem 0; }
   <div class="pipe">
     <div class="stage"><div class="t">Sees and is told</div><div class="d">camera image, a sentence, its own pose</div></div>
     <div class="stage" style="border-color: var(--accent); border-width: 2px;"><div class="t">1 · Plans the head path</div><div class="d">where the camera goes in the next 5 s</div><div class="s"><b>This page</b></div></div>
-    <div class="stage"><div class="t">2 · Expects what it will see</div><div class="d">and compares: a surprise means replan</div><div class="s">in progress, see its tab</div></div>
-    <div class="stage"><div class="t">3 · Moves the body</div><div class="d">along the planned head path</div><div class="s">in progress, see its tab</div></div>
+    <div class="stage"><div class="t">2 · Expects what it will see</div><div class="d">and compares: a surprise means replan</div></div>
+    <div class="stage"><div class="t">3 · Moves the body</div><div class="d">along the planned head path</div></div>
   </div>
 
   <h2>The data setup</h2>
@@ -282,19 +282,6 @@ ul.tight li { margin: .25rem 0; }
     <div class="key"><b>The measure fails on stairs</b><span>A flat map marks staircases as blocked.</span></div>
   </div>
 
-  <h2>Where your ideas would help most</h2>
-  <div class="asks">
-    <div class="ask"><div class="n">1</div><div><div class="q">Is this the right way to judge a head path?</div>
-      <div class="w">We score against a map of walked and measured space, not against the recorded path. It misjudges stairs, and a clipped corner counts like a walk through a table. Is there a better measure, or one a reviewer would expect?</div></div></div>
-    <div class="ask"><div class="n">2</div><div><div class="q">How should one plan be chosen from several?</div>
-      <div class="w">Among 8 draws one is nearly always clear (3.7 % fail), but a single draw fails in 17.5 %, and the model's own estimate of free space does not find the good one.</div></div></div>
-    <div class="ask"><div class="n">3</div><div><div class="q">Narration is not instruction. Does that matter?</div>
-      <div class="w">The training text describes what a person did, often with two actions and details about hands. At use, the prompt is a command. The model follows the first clause and ignores the rest.</div></div></div>
-    <div class="ask"><div class="n">4</div><div><div class="q">Is 39 training homes the limit, and what would lift it?</div>
-      <div class="w">On homes it trained on, the model estimates free distance to 0.28 m; on new homes to about 0.55 m. No image feature we tried changed that. A first test with homes from another dataset was not conclusive.</div></div></div>
-    <div class="ask"><div class="n">5</div><div><div class="q">What should the next stage build on?</div>
-      <div class="w">Replanning every 1 to 2 s already matches recorded paths (3.1 % against 2.9 %). Is that good enough to move on to the comparator and the body, or should the 5-second plan be solid first?</div></div></div>
-  </div>
 </section>
 
 <section data-tab="Overview" id="overview" hidden>
