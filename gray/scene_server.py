@@ -2,6 +2,7 @@
 """Serve the Loc_08 viewer and pass its prompts to gray/scene_worker.py on Viper. Runs on the workstation.
 
     python3 gray/scene_server.py --static ~/cursor-workspace/loc08      # then open http://127.0.0.1:8771/viewer/egoprimo.html
+    python3 gray/scene_server.py --static ~/cursor-workspace/loc08 --local ~/agent-workspace/gray/local   # worker on this machine, no cluster
 
 The viewer page and the scene are the ones built for the earlier project (``--static`` is their
 folder); the page works unchanged because the worker speaks the same protocol. Only the model
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -34,8 +36,8 @@ REMOTE = ("cd /u/enazaren/projects/gray && module load ffmpeg/7.1 2>/dev/null; e
 
 
 class Worker:
-    def __init__(self, cluster: str) -> None:
-        self.cluster, self.lock = cluster, threading.Lock()
+    def __init__(self, cluster: str, local: list[str] | None = None) -> None:
+        self.cluster, self.local, self.lock = cluster, local, threading.Lock()
         self.process: subprocess.Popen | None = None
         self.info: dict = {}
         self.body: dict | None = None
@@ -53,9 +55,10 @@ class Worker:
     def ask(self, request: dict) -> dict:
         with self.lock:
             if self.process is None or self.process.poll() is not None:
-                print(f"starting the worker in the gpusession on {self.cluster}...", flush=True)
-                self.process = subprocess.Popen(["hpc", "gpu", "exec", self.cluster, "bash", "-lc", REMOTE],
-                                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=sys.stderr, text=True, bufsize=1)
+                print("starting the worker on this machine..." if self.local else f"starting the worker in the gpusession on {self.cluster}...", flush=True)
+                self.process = subprocess.Popen(self.local or ["hpc", "gpu", "exec", self.cluster, "bash", "-lc", REMOTE],
+                                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=sys.stderr, text=True, bufsize=1,
+                                                cwd=str(Path(__file__).resolve().parents[1]))
                 self.info = self._read()
                 print(f"worker ready: {self.info}", flush=True)
             self.next_id += 1
@@ -104,6 +107,17 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json(self.worker.mesh())
             except Exception as error:  # noqa: BLE001
                 self._json({"error": str(error)}, 500)
+        elif self.path.split("?")[0].endswith("/viewer/egoprimo.html"):
+            # the page sends its prompts to port 8770 (the earlier project's server) unless it was opened there: point it at this server
+            page = (Path(self.directory) / "viewer" / "egoprimo.html").read_text()
+            fixed = re.sub(r"const API = [^;]*;", 'const API = "";', page, count=1)
+            body = fixed.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
         else:
             super().do_GET()
 
@@ -127,8 +141,13 @@ def main() -> None:
     parser.add_argument("--static", type=Path, required=True, help="the folder with viewer/egoprimo.html and the scene")
     parser.add_argument("--port", type=int, default=8771)
     parser.add_argument("--cluster", default="viper")
+    parser.add_argument("--local", type=Path, default=None, help="run the worker on this machine: a folder with env/ (Python with PyTorch), data/ and steer/ (see gray/scene_worker.py)")
     args = parser.parse_args()
-    Handler.worker = Worker(args.cluster)
+    local = None
+    if args.local is not None:
+        root = args.local.expanduser().resolve()
+        local = [str(root / "env" / "bin" / "python"), "-u", "-m", "gray.scene_worker", "--data", str(root / "data"), "--steer", str(root / "steer")]
+    Handler.worker = Worker(args.cluster, local)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), partial(Handler, directory=str(args.static.expanduser())))
     print(f"http://127.0.0.1:{args.port}/viewer/egoprimo.html", flush=True)
     try:

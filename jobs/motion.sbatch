@@ -1,12 +1,12 @@
 #!/bin/bash
 # Train the body model on moments (gray/motion.py): the head path of the next 5 s -> the body along it.
 #
-#   sbatch jobs/motion.sbatch motion-v1 [motion.py arguments]
+#   jobs/chain_train.sh 4 jobs/motion.sbatch motion-v1 [motion.py arguments]
 #
 # Log: /ptmp/enazaren/gray/runs/gray-motion-<job id>.log     Output: /ptmp/enazaren/gray/runs/<name>
 #
 #SBATCH -J gray-motion
-#SBATCH -t 08:00:00
+#SBATCH -t 01:00:00
 #SBATCH --constraint=apu --gres=gpu:1 -c 24 --mem=110000
 #SBATCH -D /u/enazaren/projects/gray
 #SBATCH -o /ptmp/enazaren/gray/runs/%x-%j.log

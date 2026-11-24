@@ -3,6 +3,7 @@
 
     python -u -m gray.scene_worker                      # serves requests; gray/scene_server.py talks to it
     python -u -m gray.scene_worker --demo 6 --out <dir> # no server: a few spawns and prompts, replies written as files
+    python -u -m gray.scene_worker --data <folder> --steer <folder>   # on a workstation, see "Away from the cluster" below
 
 It speaks the protocol of STEER's egoprimo/scene_worker.py, so the Loc_08 viewer page works with it
 unchanged (gray/scene_server.py serves the page and forwards the requests):
@@ -25,6 +26,13 @@ What happens per request:
 
 So the motion starts from how the recorded person stood or moved at the matched frame, and the head height is theirs.
 The comparator (gray/compare.py) is not part of this yet. Loc_08 is a home the models trained on.
+
+Away from the cluster: ``--data`` is a folder with runs/<head run>, runs/<body run>, index.json (the cache's list of
+recordings), and tracks/, body/, pinhole/, grids/ for the recordings of the home (13 GB for Loc_08); with clip/ in it the
+text encoder's weights are read from there. ``--steer`` is a copy of the parts of the STEER repository that decode the body
+(data/nymeria/to_actionplan.py, egoprimo/root.py and codec.py, models/ActionPlan-Code/src and its SMPL-H model,
+models/MoLingo/mogen with the autoencoder's checkpoint). Without the recordings' videos the reply carries no picture of
+what the model was shown. The models are small; a request takes well under a second on one GPU.
 """
 
 from __future__ import annotations
@@ -40,10 +48,8 @@ import numpy as np
 import torch
 
 from gray import frames, head, motion
-from gray.features import CACHE
 from gray.joint import to_device
 from gray.moments import FUTURE, HISTORY
-from gray.pinhole import STEER
 
 NOW = HISTORY - 1
 EVERY = 3  # frames between two entries of the table of recorded views
@@ -54,11 +60,87 @@ DEMO = ["C walks forward.", "C walks to the kitchen.", "C turns around and walks
         "C walks to the table.", "C walks down the hallway to the bedroom."]
 
 
+def say(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def reply(payload: dict) -> None:
+    sys.stdout.write("@@" + json.dumps(payload, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def about_up(matrices: np.ndarray, angle: float, x: float, z: float) -> np.ndarray:
+    """Turn (..., 3, 4) transforms about the vertical (x' = c x - s z, z' = s x + c z), then shift. As STEER's scene worker."""
+    cosine, sine = math.cos(angle), math.sin(angle)
+    out = np.array([[cosine, 0.0, -sine], [0.0, 1.0, 0.0], [sine, 0.0, cosine]]) @ matrices
+    out[..., 0, 3] += x
+    out[..., 2, 3] += z
+    return out
+
+
+class Mesh:
+    """The neutral SMPL-H mesh, posed by linear blend skinning with the 22 body joints. As ``Body`` in STEER's scene worker."""
+
+    def __init__(self, model_path: Path, rodrigues) -> None:
+        self.rodrigues = rodrigues
+        with np.load(model_path, allow_pickle=True) as model:
+            self.vertices = np.asarray(model["v_template"], dtype=np.float64)
+            self.faces = np.asarray(model["f"], dtype=np.int64)
+            weights = np.asarray(model["weights"], dtype=np.float64)
+            regressor = model["J_regressor"]
+            regressor = regressor.item().toarray() if regressor.shape == () else np.asarray(regressor)
+            parents = np.asarray(model["kintree_table"][0], dtype=np.int64)
+        self.rest = (regressor @ self.vertices)[:22]
+        self.parents = [-1] + [int(p) for p in parents[1:22]]
+        folded = weights[:, :22].copy()  # the fingers move with the wrists
+        folded[:, 20] += weights[:, 22:37].sum(axis=1)
+        folded[:, 21] += weights[:, 37:52].sum(axis=1)
+        self.joints4 = np.argsort(-folded, axis=1)[:, :4]
+        kept = np.take_along_axis(folded, self.joints4, axis=1)
+        self.weights4 = kept / kept.sum(axis=1, keepdims=True)
+
+    def static(self) -> dict:
+        return {"vertices_mm": np.round(self.vertices * 1000).astype(int).reshape(-1).tolist(), "faces": self.faces.reshape(-1).tolist(),
+                "joints4": self.joints4.reshape(-1).tolist(), "weights4": np.round(self.weights4, 3).reshape(-1).tolist()}
+
+    def skin(self, poses: np.ndarray, pelvis: np.ndarray) -> np.ndarray:
+        """Axis-angle poses (T, 66) and pelvis positions (T, 3) -> skinning matrices (T, 22, 3, 4)."""
+        count = poses.shape[0]
+        local = self.rodrigues(torch.from_numpy(poses).double().reshape(-1, 3)).reshape(count, 22, 3, 3).numpy()
+        turn, place = np.zeros((count, 22, 3, 3)), np.zeros((count, 22, 3))
+        for joint, parent in enumerate(self.parents):
+            if parent < 0:
+                turn[:, joint], place[:, joint] = local[:, joint], pelvis
+            else:
+                turn[:, joint] = turn[:, parent] @ local[:, joint]
+                place[:, joint] = place[:, parent] + turn[:, parent] @ (self.rest[joint] - self.rest[parent])
+        shift = place - np.einsum("tjab,jb->tja", turn, self.rest)
+        return np.concatenate([turn, shift[..., None]], axis=-1)
+
+
+class Text:
+    """CLIP-L token outputs of one sentence, as the cache has them."""
+
+    def __init__(self, device: str, weights: Path | None) -> None:
+        import clip
+
+        self.clip, self.device = clip, device
+        self.model, _preprocess = clip.load("ViT-L/14", device=device, download_root=str(weights) if weights else None)
+
+    @torch.no_grad()
+    def __call__(self, sentence: str) -> torch.Tensor:
+        model = self.model
+        tokens = self.clip.tokenize([sentence], truncate=True).to(self.device)
+        x = model.token_embedding(tokens).type(model.dtype) + model.positional_embedding.type(model.dtype)
+        x = model.ln_final(model.transformer(x.permute(1, 0, 2)).permute(1, 0, 2)).type(model.dtype)
+        return x[0, : int(tokens.argmax(dim=-1)) + 1].float()
+
+
 class Views:
     """Every third frame of the recordings of one home: camera position and view direction in the Y-up world."""
 
-    def __init__(self, location: str, cache: Path, tracks: Path, images: Path, grids: Path, body: Path) -> None:
-        index = json.loads((cache / "index.json").read_text())["sequences"]
+    def __init__(self, location: str, listing: Path, tracks: Path, images: Path, grids: Path, body: Path) -> None:
+        index = json.loads(listing.read_text())["sequences"]
         self.names = [m["sequence_id"] for m in index if m["location"] == location and (tracks / f"{m['sequence_id']}.npz").exists()
                       and (grids / m["sequence_id"] / "rows.npy").exists() and (body / f"{m['sequence_id']}.npz").exists()]
         self.data, sequence, frame, position, forward = {}, [], [], [], []
@@ -106,25 +188,37 @@ def main() -> None:
     parser.add_argument("--location", default="Loc_08")
     parser.add_argument("--head-run", type=Path, default=Path("/ptmp/enazaren/gray/runs/head-v5"))
     parser.add_argument("--body-run", type=Path, default=Path("/ptmp/enazaren/gray/runs/motion-v1"))
+    parser.add_argument("--data", type=Path, default=None, help="a folder with runs/, index.json, tracks/, body/, pinhole/, grids/ (and clip/): use it in place of the cluster's paths")
+    parser.add_argument("--steer", type=Path, default=Path("/u/enazaren/projects/STEER"), help="the STEER repository, or a copy of the parts that decode the body")
+    parser.add_argument("--videos", type=Path, default=None, help="folder of the recordings (for the picture of what the model was shown); default: the cluster's, if there")
     parser.add_argument("--demo", type=int, default=0, help="answer this many made-up requests instead of reading stdin")
     parser.add_argument("--out", type=Path, default=None, help="demo: folder for the replies")
     args = parser.parse_args()
 
-    sys.path.insert(0, str(STEER))
+    sys.path.insert(0, str(args.steer))
     from data.nymeria import to_actionplan as ap
     from egoprimo import root
     from egoprimo.codec import MotionCodec
-    from egoprimo.scene_worker import Body, Text, about_up, first_image, reply, say
-    from gray.rectify import SEQUENCES
 
-    if torch.version.hip:
+    if args.data is not None:
+        args.head_run, args.body_run = args.data / "runs" / args.head_run.name, args.data / "runs" / args.body_run.name
+    videos = args.videos
+    if videos is None and args.data is None:
+        from gray.rectify import SEQUENCES as videos
+    if getattr(torch.version, "hip", None):
         torch.backends.cuda.preferred_blas_library("cublas")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = device == "cuda"
     planner, head_mean, head_std, _config = head.load(args.head_run, device)
     model, stats, config = motion.load(args.body_run, device)
-    codec, text, body = MotionCodec().to(device), Text(device), Body()
-    views = Views(args.location, CACHE, Path(config["tracks"]), Path(config["images"]), Path(config["patches"]), Path(config["body"]))
+    weights = args.data / "clip" if args.data is not None and (args.data / "clip").is_dir() else (args.steer.parent.parent / "steer_assets" / "weights" / "clip")
+    codec, text, body = MotionCodec().to(device), Text(device, weights if weights.is_dir() else None), Mesh(ap.MODEL, ap.rodrigues)
+    if args.data is not None:
+        views = Views(args.location, args.data / "index.json", args.data / "tracks", args.data / "pinhole", args.data / "grids", args.data / "body")
+    else:
+        from gray.features import CACHE
+
+        views = Views(args.location, CACHE / "index.json", Path(config["tracks"]), Path(config["images"]), Path(config["patches"]), Path(config["body"]))
     say(f"ready: {args.head_run.name} and {args.body_run.name}, {len(views.frame):,d} recorded views of {len(views.names)} recordings in {args.location}")
     reply({"ready": True, "run": f"{args.head_run.name} + {args.body_run.name}", "checkpoint": "", "step": None, "views": int(len(views.frame)), "sequences": len(views.names)})
 
@@ -136,7 +230,7 @@ def main() -> None:
         forward /= max(float(np.linalg.norm(forward)), 1e-6)
         best, match = views.nearest(position, forward)
         sentence = " ".join(str(request.get("text", "")).split())
-        words = text(sentence)[0].cpu() if sentence else torch.zeros(1, 768)
+        words = text(sentence).cpu() if sentence else torch.zeros(1, 768)
         batch = to_device(views.batch(best, words), device)
         if not sentence:
             batch["text_valid"][:] = False
@@ -156,16 +250,19 @@ def main() -> None:
         c, s = math.cos(yaw), math.sin(yaw)
         place = lambda p: np.stack([c * p[..., 0] - s * p[..., 2] + float(position[0]), p[..., 1], s * p[..., 0] + c * p[..., 2] + float(position[2])], axis=-1)  # noqa: E731
         start = channels[0, 0]
-        skin, _posed = body.skin(smpl["poses"][0].double().numpy(), smpl["joints"][0, :, 0].double().numpy())
+        skin = body.skin(smpl["poses"][0].double().numpy(), smpl["joints"][0, :, 0].double().numpy())
         skin = about_up(about_up(skin, float(torch.atan2(start[2], start[3])), *(start[:2] * root.POSITION_SCALE).tolist()), yaw, float(position[0]), float(position[2]))[lead:]
         world, camera = place(joints), place(path[0, :, :3].double().cpu().numpy())
         _xz, psi = root.root_path(channels[0])
         facing = (-math.sin(float(psi[-1])), math.cos(float(psi[-1])))
-        try:
-            shown = first_image(SEQUENCES / match["sequence"] / "preview_rgb.mp4", match["feature"], 15.0)
-        except Exception as error:  # noqa: BLE001  the motion is still worth returning
-            say(f"first image failed: {error!r}")
-            shown = None
+        shown = None
+        if videos is not None:
+            try:
+                from egoprimo.scene_worker import first_image
+
+                shown = first_image(Path(videos) / match["sequence"] / "preview_rgb.mp4", match["feature"], 15.0)
+            except Exception as error:  # noqa: BLE001  the motion is still worth returning
+                say(f"first image failed: {error!r}")
         pelvis = world[:, 0, [0, 2]]
         gap = np.linalg.norm(world[::2, HEAD_JOINT][: len(camera)] - camera, axis=1)
         return {"id": request.get("id"), "text": sentence, "frames": int(world.shape[0]), "fps": 30, "joints_mm": np.round(world * 1000).astype(int).reshape(-1).tolist(),

@@ -1,12 +1,12 @@
 #!/bin/bash
 # Train the comparator on moments (gray/compare.py): the image feature along the path, with its uncertainty.
 #
-#   sbatch jobs/compare.sbatch compare-v1 [compare.py arguments]
+#   jobs/chain_train.sh 4 jobs/compare.sbatch compare-v1 [compare.py arguments]
 #
 # Log: /ptmp/enazaren/gray/runs/gray-compare-<job id>.log     Output: /ptmp/enazaren/gray/runs/<name>
 #
 #SBATCH -J gray-compare
-#SBATCH -t 08:00:00
+#SBATCH -t 01:00:00
 #SBATCH --constraint=apu --gres=gpu:1 -c 24 --mem=110000
 #SBATCH -D /u/enazaren/projects/gray
 #SBATCH -o /ptmp/enazaren/gray/runs/%x-%j.log

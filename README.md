@@ -66,6 +66,16 @@ Kept because its runs are the baselines. Samples are the 8 s windows of STEER's 
 | Pictures: the camera view, the sentence and the generated head paths on the room map | `gray/show.py` | `show.sbatch` |
 | More homes from another dataset (Ropedia Xperience 2): does reading a room improve? | `gray/ropedia.py` | `ropedia.sbatch` |
 
+## On a workstation: prompting the chain in Loc_08
+
+The models are small enough for one consumer GPU. With a folder that holds `env/` (Python with PyTorch and CLIP),
+`data/` and `steer/` (what goes in them is described at the top of `gray/scene_worker.py`), and the Loc_08 viewer
+page and scene of the earlier project:
+
+    python3 gray/scene_server.py --static ~/cursor-workspace/loc08 --local ~/agent-workspace/gray/local
+
+then open http://127.0.0.1:8771/viewer/egoprimo.html. Without `--local` the worker runs in a GPU session on Viper.
+
 ## Tests
 
 Run on a workstation without the data; each makes up a tiny world in which the right answer is known.
