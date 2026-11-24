@@ -263,8 +263,8 @@ ul.tight li { margin: .25rem 0; }
   </table>
 
   <div class="pair">
-    <div class="card"><video src="media/loc08-hallway.mp4" controls preload="metadata"></video>
-      <div class="cap"><div class="h">The chain, prompted: "C walks down the hallway to the bedroom."</div><div class="p">Head path from head-v5, body from motion-v1, at a spot in one home (a home from training). The same runs interactively on a workstation: click a spot, type a prompt, the figure moves.</div><div class="f">gray/scene_worker.py</div></div></div>
+    <div class="card"><video src="media/loc08-kitchen.mp4" controls preload="metadata"></video>
+      <div class="cap"><div class="h">The chain, prompted: "C walks to the kitchen."</div><div class="p">Left: what the models are given. Middle: the planned head path and the generated body in the home's scene. Right: the scene from the planned camera. A home from training; the same runs interactively on a workstation.</div><div class="f">gray/film.py</div></div></div>
     <div>
       <div class="callout"><div class="h">Where it stands, in three sentences</div>
         <ul class="tight">
@@ -561,13 +561,14 @@ ul.tight li { margin: .25rem 0; }
 
   <h2>Prompted in a home: Loc_08</h2>
   <p>The chain run at a spot in one home: the recorded frame nearest to the spot gives the image and the 2 seconds before, <code>head-v5</code> plans the head path from the prompt, <code>motion-v1</code> generates the body along it. Loc_08 is a home the models trained on, so this shows how the parts work together, not how they generalise.</p>
-  <div class="grid">
+  <p class="small">In each video: left, the prompt and the camera views the models were given (the frame at now and 1 and 2 s before). Middle, the home's mesh scene with see-through walls, the planned head path in orange and the generated body as a mesh. Right, the scene rendered from the planned camera poses.</p>
+  <div class="card" style="max-width: 1200px; margin-bottom: 1rem;"><video src="media/loc08-kitchen.mp4" controls preload="metadata"></video>
+    <div class="cap"><div class="h">"C walks to the kitchen."</div><div class="p">From a living room, 1.6 m between the furniture. The head joint stays 9 cm from the planned camera.</div><div class="f">gray/film.py</div></div></div>
+  <div class="pair">
     <div class="card"><video src="media/loc08-hallway.mp4" controls preload="metadata"></video>
-      <div class="cap"><div class="h">"C walks down the hallway to the bedroom."</div><div class="p">Walks 3.4 m along a curved plan through free space. Left: from above, planned camera path dashed, pelvis trail blue. Right: the figure, with the planned camera position as a grey dot.</div><div class="f">gray/scene_worker.py --demo · reply-5</div></div></div>
+      <div class="cap"><div class="h">"C walks down the hallway to the bedroom."</div><div class="p">Starts beside a bed and walks 3.4 m around it.</div><div class="f">gray/film.py</div></div></div>
     <div class="card"><video src="media/loc08-sofa.mp4" controls preload="metadata"></video>
-      <div class="cap"><div class="h">"C turns around and walks to the sofa."</div><div class="p">Walks 2.2 m; the head joint stays 13 cm from the planned camera.</div><div class="f">reply-2</div></div></div>
-    <div class="card"><video src="media/loc08-forward.mp4" controls preload="metadata"></video>
-      <div class="cap"><div class="h">"C walks forward." — a weak one</div><div class="p">The matched person stood at a counter. The figure stays for three seconds, then moves 0.6 m into an area marked as blocked.</div><div class="f">reply-0</div></div></div>
+      <div class="cap"><div class="h">"C turns around and walks to the sofa."</div><div class="p">Walks 2.2 m. There is no sofa in this bedroom; the plan follows the free space.</div><div class="f">gray/film.py</div></div></div>
   </div>
   <div class="card" style="max-width: 1000px; margin-bottom: 1.4rem;"><img src="img/motion-sheet.jpg" alt="Six prompts in Loc_08, six stages each, seen from above" loading="lazy">
     <div class="cap"><div class="h">Six prompts, one per row, at 0 to 5 s</div><div class="p">Seen from above on the map of free (green) and blocked (red, black) space.</div><div class="f">gray/animate.py --sheet</div></div></div>

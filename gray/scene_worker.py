@@ -12,7 +12,8 @@ Request   {"id": 1, "pos": [x, y, z], "fwd": [x, y, z], "text": "C walks to the 
           pos and fwd: head position and view direction in the Y-up world of the scene GLB.
 Reply     {"id": 1, "joints_mm": [...], "skin": [...], "frames": 150, "fps": 30, "head_mm": [...], "match": {...}, ...}
           joints_mm is frames x 22 x 3 (world x and z, y above the floor), skin frames x 22 x 12 for the body mesh,
-          head_mm the planned camera path, 75 x 3.
+          head_mm the planned camera path, 75 x 3, and head_axes its rotations (75 x 9, camera axes in the columns, in the world);
+          image_jpeg the pinhole view the models were given at now, if the recording's video is there.
 Request   {"id": 2, "body": true}  ->  the rest-pose body mesh, as in STEER's worker.
 
 What happens per request:
@@ -31,8 +32,8 @@ Away from the cluster: ``--data`` is a folder with runs/<head run>, runs/<body r
 recordings), and tracks/, body/, pinhole/, grids/ for the recordings of the home (13 GB for Loc_08); with clip/ in it the
 text encoder's weights are read from there. ``--steer`` is a copy of the parts of the STEER repository that decode the body
 (data/nymeria/to_actionplan.py, egoprimo/root.py and codec.py, models/ActionPlan-Code/src and its SMPL-H model,
-models/MoLingo/mogen with the autoencoder's checkpoint). Without the recordings' videos the reply carries no picture of
-what the model was shown. The models are small; a request takes well under a second on one GPU.
+models/MoLingo/mogen with the autoencoder's checkpoint). With videos/<id>/preview_rgb.mp4 and lens.json in the data folder
+the reply carries the picture the models were shown (gray/seen.py). The models are small; a request takes well under a second on one GPU.
 """
 
 from __future__ import annotations
@@ -202,9 +203,15 @@ def main() -> None:
 
     if args.data is not None:
         args.head_run, args.body_run = args.data / "runs" / args.head_run.name, args.data / "runs" / args.body_run.name
-    videos = args.videos
-    if videos is None and args.data is None:
-        from gray.rectify import SEQUENCES as videos
+    from gray.seen import Seen
+
+    seen = None
+    if args.videos is not None or (args.data is not None and (args.data / "videos").is_dir()):
+        seen = Seen(args.videos or args.data / "videos", args.data / "lens.json" if args.data is not None and (args.data / "lens.json").exists() else None)
+    elif args.data is None:
+        from gray.rectify import SEQUENCES
+
+        seen = Seen(SEQUENCES)
     if getattr(torch.version, "hip", None):
         torch.backends.cuda.preferred_blas_library("cublas")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -256,17 +263,19 @@ def main() -> None:
         _xz, psi = root.root_path(channels[0])
         facing = (-math.sin(float(psi[-1])), math.cos(float(psi[-1])))
         shown = None
-        if videos is not None:
+        if seen is not None:
             try:
-                from egoprimo.scene_worker import first_image
-
-                shown = first_image(Path(videos) / match["sequence"] / "preview_rgb.mp4", match["feature"], 15.0)
+                shown = seen.jpeg(match["sequence"], match["feature"])
             except Exception as error:  # noqa: BLE001  the motion is still worth returning
-                say(f"first image failed: {error!r}")
+                say(f"the picture of what the model was shown failed: {error!r}")
+        axes = frames.matrix(path[0, :, 3:].float()).double().cpu().numpy()  # (75, 3, 3) camera to anchored frame; its rows are those of the pose
+        axes = np.array([[c, 0.0, -s], [0.0, 1.0, 0.0], [s, 0.0, c]]) @ axes
+        floor = float(match["pos"][1]) - float(batch["pose"][0, NOW, 1])
         pelvis = world[:, 0, [0, 2]]
         gap = np.linalg.norm(world[::2, HEAD_JOINT][: len(camera)] - camera, axis=1)
         return {"id": request.get("id"), "text": sentence, "frames": int(world.shape[0]), "fps": 30, "joints_mm": np.round(world * 1000).astype(int).reshape(-1).tolist(),
-                "skin": np.round(skin, 4).reshape(-1).tolist(), "head_mm": np.round(camera * 1000).astype(int).reshape(-1).tolist(), "match": match,
+                "skin": np.round(skin, 4).reshape(-1).tolist(), "head_mm": np.round(camera * 1000).astype(int).reshape(-1).tolist(), "head_axes": np.round(axes, 4).reshape(-1).tolist(),
+                "floor_m": round(floor, 3), "match": match,
                 "image_jpeg": shown, "image_source": "recording", "recorded_cosine": None, "recorded_jpeg": shown, "past_body": warm,
                 "head_to_camera_cm": round(float(gap.mean() * 100), 1),
                 "end": {"head": [round(float(v), 3) for v in world[-1, HEAD_JOINT]], "fwd": [round(c * facing[0] - s * facing[1], 4), 0.0, round(s * facing[0] + c * facing[1], 4)]},

@@ -1349,3 +1349,15 @@ planned path through free space; the one told to stand stays; "walks forward" fr
 standing at a counter stays for three seconds and then moves into a blocked area. Not judged:
 whether the named place is reached (the kitchen, the sofa), and foot sliding, which stills do not
 show. Loc_08 is a training home, so this says how the parts work together, not how they generalise.
+
+### On the workstation, and a better video (24 Nov, `gray/scene_server.py --local`, `gray/film.py`)
+
+The chain runs on the workstation's RTX 3090: models, text encoder, decoder code and the data of
+Loc_08's 26 recordings (15 GB) plus their videos (23 GB) were copied; the worker loads in 8 s and
+answers in 0.08 s. Several prompts at one spot end in clearly different places, so the text
+steers; "stands still" at a spot where the person was walking still moves 1.7 m.
+
+`gray/film.py` makes a video per prompt: the pinhole views the models were given (`gray/seen.py`),
+the home's mesh scene rendered in Blender with the planned head path and the body as an SMPL
+mesh, and the scene from the planned camera poses. Where the real view shows a television or a
+dresser, the render from the planned camera shows it too, so plan, scene and recording line up.

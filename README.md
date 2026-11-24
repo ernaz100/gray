@@ -32,6 +32,7 @@ where a narration sentence starts.
 | Prompt the chain at a spot in a recorded home (worker for the Loc_08 viewer; `--demo` without it) | `gray/scene_worker.py` | `scene.sbatch` | `runs/scene-demo/` |
 | Workstation: serve the Loc_08 viewer and forward prompts to the worker | `gray/scene_server.py` | | |
 | Workstation: videos of generated motion on the room map | `gray/animate.py` | | |
+| Workstation: a video with the views the models were given, the body as a mesh in the home's scene, and the planned camera's view (Blender) | `gray/film.py`, `gray/film_blender.py`, `gray/seen.py` | | |
 | For every frame a later frame from nearly the same pose (targets for the comparator) | `gray/revisits.py` | `revisits.sbatch` | `revisits/<id>.npy` |
 | Does the comparator notice another frame than the true one? | `gray/alarm.py` | `alarm.sbatch` | `runs/<name>/alarm*.json` |
 
