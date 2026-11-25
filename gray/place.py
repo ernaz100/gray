@@ -4,6 +4,7 @@
     python -m gray.place solid                                   # per home, what stands where in 3D; writes <ground>/solid/<home>.npz
     python -m gray.place joints --hml <folder>                   # the joints of every HumanML3D frame; writes <hml>/joints.npy
     python -m gray.place pairs --hml <folder> [--draws 16]       # which motions fit where; writes <hml>/placed.npz
+    python -m gray.place show --hml <folder> --out <folder>      # some kept pairs of one home, for videos (gray/versus_scene.py render)
 
 HumanML3D has many more kinds of motion and wording than Nymeria, but no images (gray/hml.py), so until now its samples
 could teach nothing about scenes. Here a HumanML3D motion is given a real image: take a training moment of Nymeria,
@@ -349,6 +350,58 @@ def pairs(args: argparse.Namespace) -> None:
     print(f"wrote {args.hml / 'placed.npz'}", flush=True)
 
 
+def show(args: argparse.Namespace) -> None:
+    """Frames of one home drawn at random among those with ``--bodies`` kept motions or more, with those motions as bodies in the home's world."""
+    import sys
+
+    from gray.pinhole import STEER
+    from gray.scene_worker import Mesh, about_up
+
+    sys.path.insert(0, str(STEER))
+    from data.nymeria import to_actionplan as ap
+    from egoprimo.codec import MotionCodec
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if getattr(torch.version, "hip", None):
+        torch.backends.cuda.preferred_blas_library("cublas")
+    codec, mesh = MotionCodec().to(device), Mesh(ap.MODEL, ap.rodrigues)
+    table, kept = dict(np.load(args.listing)), dict(np.load(args.hml / "placed.npz"))
+    there = {m["sequence_id"] for m in json.loads((args.cache / "index.json").read_text())["sequences"] if m["location"] == args.location}
+    motions = HmlMoments(args.hml)
+    by_row: dict[int, list[int]] = {}
+    for i, row in enumerate(kept["row"]):
+        if str(table["sequence"][row]) in there:
+            by_row.setdefault(int(row), []).append(i)
+    rows = sorted(r for r, found in by_row.items() if len(found) >= args.bodies)
+    rng = np.random.default_rng(args.seed)
+    rows = [rows[i] for i in rng.permutation(len(rows))[: args.moments]]
+    print(f"{args.location}: {len(by_row):,d} frames with a kept motion, {args.moments} drawn among those with {args.bodies} or more", flush=True)
+    skins, notes = np.zeros((len(rows), args.bodies, 2 * FUTURE, 22, 3, 4), dtype=np.float32), []
+    for b, row in enumerate(rows):
+        name, frame = str(table["sequence"][row]), int(table["now"][row])
+        track = np.load(args.tracks / f"{name}.npz")
+        here, floor = torch.from_numpy(track["pose"][frame].astype(np.float32)), float(track["floor"][frame])
+        yaw = float(frames.heading(here[None, 3:])[0])
+        note = {"sequence": name, "now": frame, "floor": floor, "bodies": {}}
+        for k, i in enumerate(by_row[row][: args.bodies]):
+            item = motions.item(int(kept["sample"][i]), now=int(kept["now"][i]))
+            at = torch.tensor([NOW])
+            whole = torch.cat([item["body"][None, :, :32], frames.anchor_root(item["body"][None, :, 32:], item["pose"][None], at)], dim=-1).float().to(device)
+            with torch.no_grad():
+                smpl = ap.streamer272_to_smpl(codec.decode_with_root(whole[..., :32], whole[..., 32:]).cpu())
+            start = whole[0, 0, 32:].cpu()
+            skin = about_up(mesh.skin(smpl["poses"][0].double().numpy(), smpl["joints"][0, :, 0].double().numpy()), float(torch.atan2(start[2], start[3])), *start[:2].tolist())[2 * HISTORY :]
+            skin = about_up(skin, yaw, float(here[0]), float(here[2]))
+            skin[..., 1, 3] += floor
+            skins[b, k] = skin
+            note["bodies"][f"motion {k + 1}"] = {"travel_m": float(kept["travel"][i]), "hml": motions.samples[int(kept["sample"][i])][0]}
+        notes.append(note)
+    args.out.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(args.out / "moments.npz", skin=skins, vertices=mesh.vertices.astype(np.float32), faces=mesh.faces, joints4=mesh.joints4, weights4=mesh.weights4.astype(np.float32))
+    (args.out / "moments.json").write_text(json.dumps({"location": args.location, "kind": "placed", "moments": notes}, indent=1))
+    print(f"wrote {args.out}/moments.npz and moments.json", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     steps = parser.add_subparsers(dest="step", required=True)
@@ -368,7 +421,23 @@ def main() -> None:
     two.add_argument("--workers", type=int, default=8)
     three = steps.add_parser("joints")
     three.add_argument("--hml", type=Path, required=True)
+    four = steps.add_parser("show")
+    four.add_argument("--hml", type=Path, required=True)
+    four.add_argument("--out", type=Path, required=True)
+    four.add_argument("--listing", type=Path, default=Path("/ptmp/enazaren/gray/moments/moments.npz"))
+    four.add_argument("--tracks", type=Path, default=Path("/ptmp/enazaren/gray/tracks"))
+    four.add_argument("--cache", type=Path, default=None)
+    four.add_argument("--location", default="Loc_08")
+    four.add_argument("--moments", type=int, default=6)
+    four.add_argument("--bodies", type=int, default=3)
+    four.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    if args.step == "show":
+        if args.cache is None:
+            from gray.moments import CACHE
+
+            args.cache = CACHE
+        return show(args)
     if args.step == "solid":
         return solid(args)
     if args.step == "joints":

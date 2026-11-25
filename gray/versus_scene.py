@@ -155,6 +155,9 @@ def render(args: argparse.Namespace) -> None:
             pass
         return made
 
+    placed = notes.get("kind") == "placed"  # the output of gray/place.py show: HumanML3D motions that fit this frame
+    captions = json.loads(args.captions.expanduser().read_text()) if placed else {}
+    palette = [(42, 120, 214), (235, 104, 52), (0, 131, 0), (160, 107, 214)] if placed else COLOURS
     out.mkdir(parents=True, exist_ok=True)
     chosen = range(len(notes["moments"])) if args.only is None else args.only
     for b in chosen:
@@ -162,13 +165,14 @@ def render(args: argparse.Namespace) -> None:
         work = out / f"moment-{b}"
         work.mkdir(exist_ok=True)
         traces, bodies = [], []
-        for k, label in enumerate(LABELS):
+        labels = list(note["bodies"])
+        for k, label in enumerate(labels):
             own = saved["skin"][b, k].astype(np.float64)[:, joints4]  # (T, V, 4, 3, 4)
             posed = ((np.einsum("tvkab,vb->tvka", own[..., :3], vertices) + own[..., 3]) * weights4[None, :, :, None]).sum(2)
             blender = np.stack([posed[..., 0], -posed[..., 2], posed[..., 1]], axis=-1).astype(np.float32)  # the scene file's Y-up world -> Blender's frame
             np.save(work / f"verts-{k}.npy", blender)
             traces.append(blender.mean(1)[:, :2])
-            bodies.append({"verts": f"verts-{k}.npy", "colour": COLOURS[k]})
+            bodies.append({"verts": f"verts-{k}.npy", "colour": palette[k]})
         np.save(work / "faces.npy", saved["faces"])
         everywhere = np.concatenate(traces)
         floor = note["floor"]
@@ -182,21 +186,34 @@ def render(args: argparse.Namespace) -> None:
         subprocess.run([args.blender, "-b", "-P", str(Path(__file__).with_name("film_blender.py")), "--", str(work)], check=True, stdout=subprocess.DEVNULL)
         view = Image.fromarray(seen.view(note["sequence"], note["now"], 360))
         (work / "page").mkdir(exist_ok=True)
-        shown = ["#%02x%02x%02x" % c for c in COLOURS]
+        shown = ["#%02x%02x%02x" % c for c in palette]
         count = len(traces[0])
         for f in range(count):
             page = Image.new("RGB", (1780, 880), (249, 249, 247))
             draw = ImageDraw.Draw(page)
-            draw.text((30, 22), "Given to both models", font=font(20, True), fill=(20, 20, 20))
+            draw.text((30, 22), "The recorded frame" if placed else "Given to both models", font=font(20, True), fill=(20, 20, 20))
             draw.text((30, 60), "Camera view now", font=font(14), fill=(95, 94, 90))
             page.paste(view, (30, 82))
-            draw.text((30, 458), "Sentence", font=font(14), fill=(95, 94, 90))
-            y = 482
-            for line in textwrap.wrap(f"\"{note['sentence']}\"", 36)[:6]:
-                draw.text((30, y), line, font=font(17, True), fill=(20, 20, 20))
-                y += 24
-            y = max(y + 22, 640)
-            for k, label in enumerate(LABELS):
+            y = 458
+            if placed:
+                draw.text((30, y), "HumanML3D motions kept for this frame", font=font(14), fill=(95, 94, 90))
+                y += 26
+                for k, label in enumerate(labels):
+                    m = note["bodies"][label]
+                    draw.rectangle((30, y + 3, 46, y + 19), fill=shown[k])
+                    for line in textwrap.wrap(captions.get(m["hml"].lstrip("M"), captions.get(m["hml"], ["?"]))[0], 40)[:4]:
+                        draw.text((54, y), line, font=font(15, True), fill=(20, 20, 20))
+                        y += 21
+                    draw.text((54, y), f"travels {m['travel_m']:.1f} m  ·  HumanML3D {m['hml']}", font=font(13), fill=(95, 94, 90))
+                    y += 34
+            else:
+                draw.text((30, y), "Sentence", font=font(14), fill=(95, 94, 90))
+                y = 482
+                for line in textwrap.wrap(f"\"{note['sentence']}\"", 36)[:6]:
+                    draw.text((30, y), line, font=font(17, True), fill=(20, 20, 20))
+                    y += 24
+                y = max(y + 22, 640)
+            for k, label in enumerate([] if placed else labels):
                 m = note["bodies"][label]
                 draw.rectangle((30, y + 3, 46, y + 19), fill=shown[k])
                 draw.text((54, y), label, font=font(16, True), fill=(20, 20, 20))
@@ -204,14 +221,15 @@ def render(args: argparse.Namespace) -> None:
                 if m["through"]:
                     draw.text((54, y + 40), "goes through something", font=font(13), fill=(190, 60, 40))
                 y += 66
-            draw.text((420, 22), "The first 5 s, in the home's scene", font=font(20, True), fill=(20, 20, 20))
+            draw.text((420, 22), "Placed in the home's scene, 5 s" if placed else "The first 5 s, in the home's scene", font=font(20, True), fill=(20, 20, 20))
             page.paste(Image.open(work / "third" / f"{f:04d}.png").convert("RGB"), (420, 60))
             draw.text((1260, 22), "From above", font=font(20, True), fill=(20, 20, 20))
             page.paste(Image.open(work / "top" / f"{f:04d}.png").convert("RGB"), (1260, 60))
             draw.text((1260, 600), f"{f / 30:0.1f} s", font=font(40, True), fill=(20, 20, 20))
             draw.rectangle((1260, 660, 1740, 668), fill=(225, 224, 217))
             draw.rectangle((1260, 660, 1260 + int(480 * (f + 1) / count), 668), fill=(42, 120, 214))
-            for i, line in enumerate(("Lines on the floor: where each pelvis goes in the 5 s.", "Walls are drawn see-through.", "Each model is given only this frame and this sentence.",
+            for i, line in enumerate(("Lines on the floor: where each pelvis goes in the 5 s.", "Walls are drawn see-through.", "Each motion's camera starts on the recorded camera;", "it is kept because it fits the home's map.") if placed else
+                                     ("Lines on the floor: where each pelvis goes in the 5 s.", "Walls are drawn see-through.", "Each model is given only this frame and this sentence.",
                                       f"{notes['location']} is a training home of both models.")):
                 draw.text((1260, 690 + 22 * i), line, font=font(14), fill=(95, 94, 90))
             page.save(work / "page" / f"{f:04d}.png")
@@ -239,6 +257,7 @@ def main() -> None:
     two.add_argument("--out", type=Path, required=True)
     two.add_argument("--scene", default="scene.glb")
     two.add_argument("--only", type=int, nargs="+", default=None)
+    two.add_argument("--captions", type=Path, default=None, help="texts.json of gray/hml.py, for the output of gray/place.py show")
     two.add_argument("--blender", default="blender")
     args = parser.parse_args()
     export(args) if args.step == "export" else render(args)
