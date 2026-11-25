@@ -55,6 +55,8 @@ NOW = HISTORY - 1
 CUBE = 0.10  # metres
 FLOOR = 0.15  # metres above a floor that are not solid
 PARENTS = [-1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 12, 13, 14, 16, 17, 18, 19]  # of the 22 joints
+_PARTS = {"trunk and head": [0, 3, 6, 9, 12, 13, 14, 15], "upper legs and knees": [1, 2, 4, 5], "lower legs and feet": [7, 8, 10, 11], "upper arms": [16, 17, 18, 19], "forearms and hands": [20, 21]}
+GROUPS = {name: joints + [21 + j for j in joints if j > 0] for name, joints in _PARTS.items()}  # with the middle of the bone that ends in each joint
 
 
 class Solid:
@@ -201,7 +203,7 @@ def pairs(args: argparse.Namespace) -> None:
     kept = {"row": [], "sample": [], "now": [], "travel": []}
     tally = {key: [] for key in ("travel", "not_blocked", "walked", "body", "height", "all")}
     recorded = {key: [] for key in ("travel", "not_blocked", "walked")}
-    recorded_body = []
+    recorded_body, why = [], {}
     for home, everything in sorted(by_home.items()):
         ground = Ground(args.ground / f"{home}.npz")
         things = Solid(args.ground / "solid" / f"{home}.npz") if whole else None
@@ -240,7 +242,8 @@ def pairs(args: argparse.Namespace) -> None:
                 rows_, cols_ = d["wall"].shape[1:]
                 ok = (cell[:, 0] >= 0) & (cell[:, 0] < cols_) & (cell[:, 1] >= 0) & (cell[:, 1] < rows_)
                 wall = ok & d["wall"].any(0)[np.clip(cell[:, 1], 0, rows_ - 1), np.clip(cell[:, 0], 0, cols_ - 1)]
-                return ~(wall | things.inside(world)).reshape(points.shape[:-1]).any(-1)
+                clear.wall, clear.solid = wall.reshape(points.shape[:-1]), things.inside(world).reshape(points.shape[:-1])  # kept for the breakdown of the recorded bodies
+                return ~(clear.wall | clear.solid).any(-1)
 
             # what the recorded 5 s of these frames do under the same rules (camera only)
             own_path = frames.anchor(here, torch.zeros(len(own), dtype=torch.long))[:, steps, :3].double().numpy()
@@ -291,6 +294,12 @@ def pairs(args: argparse.Namespace) -> None:
                         padded[:, 0, :, 1] = 99.0  # far above everything
                         padded[some, 0] = made.reshape(len(some), -1, 3)
                         recorded_body += clear(padded)[some, 0].tolist()
+                        for cause, hit in (("a wall", clear.wall), ("something solid", clear.solid)):
+                            hit = hit[some, 0].reshape(len(some), len(steps), 43)
+                            for group, members in GROUPS.items():
+                                why.setdefault((cause, group), []).extend(hit[:, :, members].any((1, 2)).tolist())
+                            why.setdefault((cause, "any part"), []).extend(hit.any((1, 2)).tolist())
+                            why.setdefault((cause, "any part, in the first second"), []).extend(hit[:, :5].any((1, 2)).tolist())
             else:
                 free_body = np.ones_like(ok)
             passes = ok & walked & level & free_body
@@ -310,6 +319,8 @@ def pairs(args: argparse.Namespace) -> None:
     edges = [0, 1, 2, 3, 5, 99]
     if recorded_body:
         print(f"\nthe recorded bodies of {len(recorded_body):,d} of these frames: {np.mean(recorded_body):.1%} pass the body rule (they all should: the rest is the rule's error)")
+        for (cause, group), values in sorted(why.items()):
+            print(f"    in {cause:16s} {group:30s} {np.mean(values):6.1%}")
     print(f"\n{len(tally['all']):,d} draws\n  {'the motion goes':20s} draws  not blocked  and walked  and body  height within 10 cm  all | recorded 5 s of these frames: not blocked  walked")
     report = {}
     for lo, hi in [(0, 99)] + list(zip(edges[:-1], edges[1:])):
