@@ -91,7 +91,7 @@ def main() -> None:
         name, first = key.rsplit("_start_", 1)
         if name in index and key in theirs and int(first) % 2 == 0:
             i, s = index[name], int(first) * 3 // 2
-            if data.start[i] + s + 76 <= data.start[i + 1]:
+            if data.start[i] + s + 76 <= data.start[i + 1] and len(truth[key]["aria_traj_T"]) > 50:
                 keys.append(key)
                 starts.append((i, s))
     clips = EeMoments(args.ee4d, "val", starts=starts)
@@ -129,8 +129,9 @@ def main() -> None:
                 gap = (joints - against).norm(dim=-1)
                 return [float(gap.mean()), float((rigid(joints, against) - against).norm(dim=-1).mean()), float(gap[:, 15].mean()), float(gap[:, 0].mean())]
 
+            both = min(len(real), len(guess))  # some clips at the end of a segment are shorter than 8 s
             rows["UniEgoMotion"].append(score(guess[their_at], real[their_at]))
-            rows["UniEgoMotion, 8 s"].append(score(guess, real))
+            rows["UniEgoMotion, 8 s"].append(score(guess[:both], real[:both]))
             for name, joints in made.items():
                 rows[name].append(score(joints[b, ours_at].double() @ turn.T + shift, real[their_at]))
         print(f"  {min(first + args.batch, len(keys)):,d} clips", flush=True)
