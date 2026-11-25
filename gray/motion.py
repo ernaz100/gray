@@ -154,12 +154,14 @@ def flow_loss(model: Body, batch: dict, stats: dict, text_drop: float = 0.0, col
 
 @torch.no_grad()
 def sample(model: Body, batch: dict, stats: dict, steps: int = 20, generator: torch.Generator | None = None, amp: bool = False, warm: bool = True,
-           temperature: float = 1.0, head: torch.Tensor | None = None) -> torch.Tensor:
+           temperature: float = 1.0, head: torch.Tensor | None = None, history: int = HISTORY) -> torch.Tensor:
     """One generated body per sample (B, 75, 36), in the frame anchored at now, not standardized.
+
+    ``history``: how many of the 30 frames before now the model is shown (1: only the frame at now).
 
     ``head``: other head poses (B, 105, 9), anchored at now and in metres, to use in place of the recorded ones (a generated path).
     """
-    own, image, seen, past, future, text, text_valid, patches = inputs(batch, stats)
+    own, image, seen, past, future, text, text_valid, patches = inputs(batch, stats, history)
     if head is not None:
         own = (head - stats["head_mean"]) / stats["head_std"]
     known = torch.full((own.shape[0],), warm, dtype=torch.bool, device=own.device)

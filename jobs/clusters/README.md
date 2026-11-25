@@ -14,14 +14,16 @@ resume one another; the run folder is `<data>/runs/<run name>` on the cluster th
 
 ## What is where
 
-| Data | Size | Viper | Raven | MPI |
-|---|---:|---|---|---|
-| Nymeria: features, image grids, moments, maps, body | 700 GB | yes | no | no |
-| `ee4d/` (UniEgoMotion's data in our form) | 13 GB | yes | no | no |
-| `hml3d/` (HumanML3D in our form) | 2 GB | yes | no | no |
+| Data | Size | Viper | Raven |
+|---|---:|---|---|
+| Nymeria: features, image grids, moments, maps, body | 700 GB | yes | no |
+| `ee4d/` (UniEgoMotion's data in our form) | 13 GB | yes | no |
+| `hml3d/` (HumanML3D in our form) | 2 GB | yes | no |
+| `uem/` (UniEgoMotion's predictions and validation truth, SMPL-X) | 2 GB | yes | no |
 
-Trainings on Nymeria can only run on Viper. Those on `ee4d` and `hml3d` can run wherever those
-folders have been copied to.
+Viper and Raven are the two clusters in use (user, 25 Nov 2026): only they have room for Nymeria. They are meant to hold
+the same data, so that any training can go to either; Raven has not been set up yet (it was down on 25 Nov).
+Until then everything runs on Viper.
 
 ## Adding a cluster, or data to one
 
