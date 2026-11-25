@@ -32,9 +32,9 @@ under the same rules. Written: the pairs that pass all three, at most ``--keep``
     placed.npz   row (the moment's row in the listing), sample and now (the motion: its index in gray/hml.py's samples, and the
                  frame at now in hml.npz), travel (m the camera goes in the 5 s)
 
-``Placed`` gives these pairs as training samples (gray/head.py and gray/motion.py, ``--placed``): the image feature and image
-grid of the recorded frame at now; the motion's own camera poses, body and caption; nothing before now (the 2 s before now in
-the room were another person's), so the models learn these as starts from a single frame.
+``Placed`` gives these pairs as training samples (gray/head.py and gray/motion.py, ``--placed <hml folder>``): the image
+feature and image grid of the recorded frame at now; the motion's own camera poses, body and caption; nothing before now
+(the 2 s before now in the room were another person's), so the models learn these as starts from a single frame.
 """
 
 from __future__ import annotations
@@ -152,30 +152,32 @@ HEIGHT = 0.10
 
 
 class Placed(torch.utils.data.Dataset):
-    """The pairs of placed.npz as samples shaped like those of gray/moments.py with a body."""
+    """The pairs of placed.npz as training samples, shaped like those of the ``moments`` they are placed in (gray/moments.py, no jitter).
 
-    def __init__(self, hml: Path, listing: Path, images: Path, patches: Path, pairs: Path | None = None) -> None:
-        self.motions = HmlMoments(hml)
-        self.pairs = dict(np.load(pairs or hml / "placed.npz"))
-        self.table = np.load(listing)
-        self.sequence, self.frame = self.table["sequence"], self.table["now"]
-        self.images, self.patches = images, patches
-        self._open: dict[str, dict] = {}
+    From the recorded moment: the image feature and image grid of the frame at now, and whatever else the training reads off
+    that frame (the free distances around it). From the HumanML3D motion: the camera poses, the body, and one of its captions.
+    Nothing before now is shown ("history_max" 1).
+    """
+
+    def __init__(self, moments, hml: Path, pairs: Path | None = None) -> None:
+        self.moments, self.motions = moments, HmlMoments(hml)
+        d = np.load(pairs or hml / "placed.npz")
+        at = {int(row): i for i, row in enumerate(moments.rows)}
+        keep = np.array([int(row) in at for row in d["row"]])
+        self.index = np.array([at[int(row)] for row in d["row"][keep]])
+        self.sample, self.now = d["sample"][keep], d["now"][keep]
 
     def __len__(self) -> int:
-        return len(self.pairs["row"])
+        return len(self.index)
 
-    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
-        row = int(self.pairs["row"][index])
-        out = self.motions.item(int(self.pairs["sample"][index]), now=int(self.pairs["now"][index]))
-        name, frame = str(self.sequence[row]), int(self.frame[row])
-        if name not in self._open:
-            self._open[name] = {"image": np.load(self.images / name / "dino.npy", mmap_mode="r"), "rows": np.load(self.patches / name / "rows.npy"),
-                                "grid": np.load(self.patches / name / "patches.npy", mmap_mode="r")}
-        a = self._open[name]
-        image = torch.zeros(HISTORY, 384)
-        image[-1] = torch.from_numpy(np.array(a["image"][frame], dtype=np.float32))
-        out |= {"image": image, "patches": torch.from_numpy(np.array(a["grid"][int(a["rows"][frame])], dtype=np.float32)), "foreign": torch.tensor(False), "history_max": torch.tensor(1)}
+    def __getitem__(self, i: int) -> dict[str, torch.Tensor]:
+        out = self.moments[int(self.index[i])]
+        motion = self.motions.item(int(self.sample[i]), now=int(self.now[i]))
+        image = torch.zeros_like(out["image"])
+        image[-1] = out["image"][-1]
+        out |= {"image": image, "pose": motion["pose"], "text": motion["text"], "history_max": torch.tensor(1), "foreign": torch.tensor(False)}
+        if "body" in out:
+            out |= {"body": motion["body"], "body_known": motion["body_known"]}
         return out
 
 

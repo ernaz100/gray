@@ -288,6 +288,8 @@ def main() -> None:
     parser.add_argument("--patches", type=Path, default=None, help="folder of gray/patches.py: the model also sees the image grid of the frame at now")
     parser.add_argument("--depth", type=Path, default=None, help="folder of gray/depth.py: the model also gets the estimated depth of the frame at now (needs --patches)")
     parser.add_argument("--ee4d", type=Path, default=None, help="folder of gray/ee4d.py: train and score on UniEgoMotion's data in place of Nymeria (no text, no image grid, no maps)")
+    parser.add_argument("--placed", type=Path, default=None, help="folder of gray/hml.py with placed.npz (gray/place.py): also train on HumanML3D motions placed into recorded frames")
+    parser.add_argument("--placed-share", type=float, default=0.3, help="share of the training samples drawn from them")
     parser.add_argument("--image-dim", type=int, default=384, help="numbers per image feature (1024 for --ee4d)")
     parser.add_argument("--explore", type=int, default=1, help="train on the best of this many noises per sample (explorative training); 1 is ordinary training")
     parser.add_argument("--one-step", action="store_true", help="always start from pure noise: the model generates a path in one pass")
@@ -361,7 +363,16 @@ def main() -> None:
         args.save_dir.mkdir(parents=True, exist_ok=True)
         (args.save_dir / "config.json").write_text(json.dumps(config, indent=1))
 
-    loader = DataLoader(training, shuffle=True, drop_last=True, **options)
+    if args.placed is not None:  # HumanML3D motions placed into recorded frames (gray/place.py)
+        from gray.place import Placed
+
+        other = Placed(Moments(**data, held=False), args.placed)
+        weights = torch.cat([torch.full((len(training),), (1 - args.placed_share) / len(training)), torch.full((len(other),), args.placed_share / len(other))])
+        print(f"also {len(other):,d} HumanML3D motions placed into recorded frames, drawn for {args.placed_share:.0%} of the training samples", flush=True)
+        sampler = torch.utils.data.WeightedRandomSampler(weights.double(), num_samples=len(training), replacement=True)
+        loader = DataLoader(torch.utils.data.ConcatDataset([training, other]), sampler=sampler, drop_last=True, **options)
+    else:
+        loader = DataLoader(training, shuffle=True, drop_last=True, **options)
     running, free_running, started = [], [], time.time()
     model.train()
     while step < args.steps:

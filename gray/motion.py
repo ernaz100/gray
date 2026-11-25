@@ -225,6 +225,8 @@ def main() -> None:
     parser.add_argument("--cold", type=float, default=0.3, help="share of training samples without the past body")
     parser.add_argument("--ee4d", type=Path, default=None, help="folder of gray/ee4d.py: train and score on UniEgoMotion's data in place of Nymeria (no text, no image grid)")
     parser.add_argument("--image-dim", type=int, default=384, help="numbers per image feature (1024 for --ee4d)")
+    parser.add_argument("--placed", type=Path, default=None, help="folder of gray/hml.py with placed.npz (gray/place.py): also train on HumanML3D motions placed into recorded frames")
+    parser.add_argument("--placed-share", type=float, default=0.3, help="share of the training samples drawn from them")
     parser.add_argument("--hml", type=Path, default=None, help="folder of gray/hml.py: also train on HumanML3D motions (no images; text and body)")
     parser.add_argument("--hml-share", type=float, default=0.3, help="share of the training samples drawn from HumanML3D")
     parser.add_argument("--hml-path", choices=("masked", "given"), default="masked",
@@ -300,7 +302,15 @@ def main() -> None:
         args.save_dir.mkdir(parents=True, exist_ok=True)
         (args.save_dir / "config.json").write_text(json.dumps(config, indent=1))
 
-    if args.hml is not None:
+    if args.placed is not None:  # HumanML3D motions placed into recorded frames (gray/place.py)
+        from gray.place import Placed
+
+        other = Placed(Moments(**data, held=False, everything=args.everything), args.placed)
+        weights = torch.cat([torch.full((len(training),), (1 - args.placed_share) / len(training)), torch.full((len(other),), args.placed_share / len(other))])
+        print(f"also {len(other):,d} HumanML3D motions placed into recorded frames, drawn for {args.placed_share:.0%} of the training samples", flush=True)
+        sampler = torch.utils.data.WeightedRandomSampler(weights.double(), num_samples=len(training), replacement=True)
+        loader = DataLoader(torch.utils.data.ConcatDataset([training, other]), sampler=sampler, drop_last=True, **options)
+    elif args.hml is not None:
         from gray.hml import HmlMoments
 
         other = HmlMoments(args.hml)

@@ -195,14 +195,15 @@ def render(args: argparse.Namespace) -> None:
             for line in textwrap.wrap(f"\"{note['sentence']}\"", 36)[:6]:
                 draw.text((30, y), line, font=font(17, True), fill=(20, 20, 20))
                 y += 24
-            y = max(y + 22, 650)
+            y = max(y + 22, 640)
             for k, label in enumerate(LABELS):
                 m = note["bodies"][label]
                 draw.rectangle((30, y + 3, 46, y + 19), fill=shown[k])
                 draw.text((54, y), label, font=font(16, True), fill=(20, 20, 20))
-                draw.text((54, y + 22), f"travels {m['travel_m']:.1f} m" + ("" if label == "recorded" else f", {m['joints_cm']:.0f} cm from recorded") + (", goes through something" if m["through"] else ""),
-                          font=font(13), fill=(95, 94, 90))
-                y += 52
+                draw.text((54, y + 22), f"travels {m['travel_m']:.1f} m" + ("" if label == "recorded" else f", {m['joints_cm']:.0f} cm from recorded"), font=font(13), fill=(95, 94, 90))
+                if m["through"]:
+                    draw.text((54, y + 40), "goes through something", font=font(13), fill=(190, 60, 40))
+                y += 66
             draw.text((420, 22), "The first 5 s, in the home's scene", font=font(20, True), fill=(20, 20, 20))
             page.paste(Image.open(work / "third" / f"{f:04d}.png").convert("RGB"), (420, 60))
             draw.text((1260, 22), "From above", font=font(20, True), fill=(20, 20, 20))
