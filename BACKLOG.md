@@ -30,7 +30,7 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 - [ ] If HumanML3D is to be pursued: a larger share, the head path roughened, or pretraining on it and then Nymeria.
 - [x] **Rejection sampling into real scenes** (`gray/place.py`, 25 Nov): 6.6 % of draws fit (path on walked floor, whole
       body clear of walls and of what stands there, camera height within 10 cm); 36,766 pairs.
-- [ ] **Training on the pairs**: `head-v6` and `motion-v4` (Viper, running). Then the tables of head-v5 and motion-v1.
+- [ ] **Training on the pairs**: `head-v7` and `motion-v4` (Viper, running). Then the tables of head-v5 and motion-v1.
 - [ ] Sample EgoPriMo with few steps and reduced noise, so that sampling is the same on both sides.
 - [ ] UniEgoMotion against ours as video: on a plain floor now; in its rooms when Ego-Exo4D access is there (pending).
 - [x] **EgoPriMo as a baseline** (`gray/versus_egoprimo.py`, 25 Nov): on 1,500 held-out moments, at the same amount of

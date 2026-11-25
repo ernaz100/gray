@@ -1634,7 +1634,7 @@ HumanML3D samples are used. Kept motions go 2.15 m on average, all draws 2.90 m.
   80 % and "walked" in 76 %.
 - Body points have no thickness.
 - Trainings with the pairs for 30 % of the samples, otherwise as their predecessors:
-  `head-v6` (as head-v5) and `motion-v4` (as motion-v1), Viper, 1-hour jobs from 13684899 and
+  `head-v7` (as head-v5; first submitted under the name of an existing run, head-v6, where the jobs stopped at once without changing it) and `motion-v4` (as motion-v1), Viper, 1-hour jobs from
   13684906. A pair is shown as a start from a single frame.
 
 ### Scene videos against the EgoPriMo reimplementation (25 Nov, `gray/versus_scene.py`)
