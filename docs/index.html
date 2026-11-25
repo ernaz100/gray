@@ -216,7 +216,7 @@ td.best { font-weight: 600; }
     <div class="col done"><h4>Done on 24 and 25 November</h4>
       <div class="it"><b>Rejection sampling, whole body</b><span>36,766 pairs of a recorded frame and a HumanML3D motion that fits the room.</span></div>
       <div class="it"><b>Scene videos</b><span>8 random samples in Loc_08, ours against EgoPriMo.</span></div>
-      <div class="it"><b>Comparison with UniEgoMotion</b><span>Level, perhaps slightly ahead, on its own data.</span></div>
+      <div class="it"><b>Comparison with UniEgoMotion</b><span>Level or slightly ahead on its own data, in all three of its tasks.</span></div>
       <div class="it"><b>Comparison with EgoPriMo</b><span>A third nearer to the recorded body, half the paths through something.</span></div>
       <div class="it"><b>How far planned paths go</b><span>Less noise cuts detours more than distance.</span></div>
       <div class="it"><b>HumanML3D mixed in without images</b><span>No gain (motion-v2, motion-v3).</span></div>
@@ -235,6 +235,15 @@ td.best { font-weight: 600; }
   </table>
   <div class="callout"><div class="h">How to read it</div>
     <p>Standing still has the lowest joint distance, so that number alone rewards not moving. Without text our low-noise setting hardly moves, and its 25.4 cm is that effect. Sampled in full, our chain moves as people do and is level with UniEgoMotion. Its sampling spread is unknown: one saved sample.</p></div>
+
+  <h3>Its other two tasks</h3>
+  <table>
+    <tr><th>Task</th><th>What is given</th><th>UniEgoMotion</th><th>Ours</th><th>Travel: recorded / UniEgoMotion / ours</th></tr>
+    <tr><td>Generation</td><td>the first frame</td><td>33.9 cm</td><td class="best">32.3 cm</td><td>0.76 / 0.59 / 0.72 m</td></tr>
+    <tr><td>Forecasting</td><td>camera path and images of 2 s; the 5 s after are scored</td><td>30.7 cm</td><td class="best">28.4 cm</td><td>0.75 / 0.41 / 0.73 m</td></tr>
+    <tr><td>Reconstruction</td><td>the camera path (it: all images; ours: one)</td><td>9.6 cm</td><td class="best">8.7 cm</td><td>fixed by the path</td></tr>
+  </table>
+  <p class="small">Joint distance over 5 s. Ours as a full sample for generation and forecasting, the low-noise setting for reconstruction. After aligning the pose the two are level in all three (8.1 to 8.2 cm, 8.0 to 8.1 cm, 5.6 to 5.9 cm). One saved sample of UniEgoMotion per task.</p>
 
   <h2>Against EgoPriMo, on held-out Nymeria homes</h2>
   <p>1,500 held-out samples. Both models are given the frame at now and one sentence; the first 5 s are scored. EgoPriMo is our reimplementation (no code or weights were released).</p>

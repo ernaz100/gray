@@ -1649,3 +1649,38 @@ Note on the comparison of 25 Nov: at full noise our chain goes through something
 EgoPriMo (26.1 against 27.1 %) and is 61.9 against 76.5 cm from the recorded body. So most of the
 difference in collisions and 10 of the 24 cm are the sampling setting, which EgoPriMo was not
 given. To do: sample EgoPriMo with few steps and reduced noise too.
+
+### UniEgoMotion's other two tasks (25 Nov, `gray/versus_uem.py --tasks fore recon`, jobs 13686404 and 13686405)
+
+Its saved predictions for forecasting and reconstruction, our `ee-head-v1` and `ee-motion-v1`, the
+same clips, joints and 5 s as for generation.
+
+Forecasting: it is shown the camera path and images of the clip's first 2 s; ours the same 2 s (no
+body). The 5 s after them, 3,347 clips.
+
+| | Joints | Aligned | Head | Pelvis | Pelvis travels | 1 m or more |
+|---|---:|---:|---:|---:|---:|---:|
+| Recorded | | | | | 0.75 m | 25 % |
+| Standing still | 22.0 cm | 5.4 cm | 22.3 cm | 19.5 cm | 0 | 0 % |
+| UniEgoMotion | 30.7 cm | 8.1 cm | 29.7 cm | 27.9 cm | 0.41 m | 12 % |
+| Our chain, a full sample (20 steps, noise 1) | 28.4 cm | 8.0 cm | 26.9 cm | 25.4 cm | 0.73 m | 23 % |
+| Our chain, 4 steps, noise 0.5 and 0.3 | 22.9 cm | 6.9 cm | 21.3 cm | 20.5 cm | 0.29 m | 5 % |
+
+Reconstruction: it is given the whole camera path and all images; our body model the recorded
+camera path and the image of the first frame. The first 5 s, 3,678 clips.
+
+| | Joints | Aligned | Head | Pelvis |
+|---|---:|---:|---:|---:|
+| UniEgoMotion | 9.6 cm | 5.6 cm | 5.1 cm | 7.6 cm |
+| Our body along the recorded head path, 4 steps, noise 0.3 | 8.7 cm | 5.9 cm | 4.3 cm | 6.9 cm |
+| The same, a full sample (20 steps, noise 1) | 10.2 cm | 7.0 cm | 4.7 cm | 7.7 cm |
+| Recorded body through our encoder and decoder | 2.9 cm | 2.6 cm | 3.9 cm | 1.8 cm |
+
+- Forecasting: sampled in full, ours moves as people do (0.73 against 0.75 m) and is 2.3 cm
+  nearer; UniEgoMotion moves about half as far as people here (0.41 m), which lowers its error.
+  Standing still beats both again.
+- Reconstruction: level. Ours is nearer on where the body is (pelvis, head), UniEgoMotion on the
+  pose (5.6 against 5.9 cm) while seeing every image where ours sees one. Here the head path
+  fixes how far the body goes, so low noise is no shortcut, only a better guess of the pose.
+- Over the three tasks: generation 32.3 against 33.9 cm, forecasting 28.4 against 30.7 cm,
+  reconstruction 8.7 against 9.6 cm. One saved sample of UniEgoMotion per task.

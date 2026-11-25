@@ -52,6 +52,7 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
         sampled in full (joints 32.3 against 33.9 cm, travel 0.72 against 0.59 m; recorded 0.76 m). Standing still beats both
         on joint distance, so that measure alone is not used any more.
   - [x] three seeds: ours 32.3 to 32.6 cm against 33.9 cm
+  - [x] its forecasting and reconstruction tasks: 28.4 against 30.7 cm, and 8.7 against 9.6 cm
   - [ ] measures that do not reward caution, as distributions over clips
   - note: its repository has a two-stage configuration (a trajectory model, then motion), the same order as our chain
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
