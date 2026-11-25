@@ -5,6 +5,10 @@
 The work folder holds scene.json (paths and numbers), verts.npy (frames x vertices x 3) and faces.npy of the body, in
 Blender's frame (x, y, z up). It writes third/0000.png ... (the room from above and behind, walls see-through, the body
 walking along the planned head path) and first/0000.png ... (the room from the planned camera poses, body hidden).
+
+For gray/versus_scene.py: with "bodies" in scene.json (a list of {"verts": file, "colour": [r, g, b]}) several bodies walk in
+the room, each with the trace of its pelvis on the floor; "path" may then be missing (no planned camera, no first/), and
+"top_size" and "top_width" (m) ask for top/0000.png ..., the same from straight above.
 """
 
 import json
@@ -17,7 +21,10 @@ from mathutils import Matrix, Vector
 
 work = Path(sys.argv[sys.argv.index("--") + 1])
 spec = json.loads((work / "scene.json").read_text())
-verts, faces = np.load(work / "verts.npy"), np.load(work / "faces.npy")
+faces = np.load(work / "faces.npy")
+shown = spec.get("bodies") or [{"verts": "verts.npy", "colour": [52, 120, 214]}]
+all_verts = [np.load(work / one["verts"]) for one in shown]
+verts = all_verts[0]
 
 
 def srgb(red, green, blue):
@@ -91,14 +98,24 @@ bpy.ops.object.light_add(type="AREA", location=(centre.x, centre.y, centre.z + 2
 bpy.context.object.data.energy = 250
 bpy.context.object.data.size = 5.0
 
-# the body
-mesh = bpy.data.meshes.new("body")
-mesh.from_pydata(verts[0].tolist(), [], faces.tolist())
-for poly in mesh.polygons:
-    poly.use_smooth = True
-mesh.materials.append(material("body", srgb(52, 120, 214), roughness=0.5))
-body = bpy.data.objects.new("body", mesh)
-scene.collection.objects.link(body)
+# the bodies
+meshes, people = [], []
+for number, (one, own) in enumerate(zip(shown, all_verts)):
+    mesh = bpy.data.meshes.new(f"body {number}")
+    mesh.from_pydata(own[0].tolist(), [], faces.tolist())
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    mesh.materials.append(material(f"body {number}", srgb(*one["colour"]), roughness=0.5))
+    body = bpy.data.objects.new(f"body {number}", mesh)
+    scene.collection.objects.link(body)
+    meshes.append(mesh)
+    people.append(body)
+
+
+def pose(f: int) -> None:
+    for mesh, own in zip(meshes, all_verts):
+        mesh.vertices.foreach_set("co", own[f].reshape(-1))
+        mesh.update()
 
 
 def tube(name, points, colour, radius, emission=1.5):
@@ -115,9 +132,15 @@ def tube(name, points, colour, radius, emission=1.5):
     return made
 
 
-path = np.array(spec["path"])
-plan = tube("plan", path.tolist(), srgb(235, 104, 52), 0.02)
-shadow = tube("plan on the floor", [(x, y, spec["floor"] + 0.02) for x, y, _z in path], srgb(235, 104, 52), 0.012, emission=0.6)
+drawn = []
+if "path" in spec:
+    path = np.array(spec["path"])
+    plan = tube("plan", path.tolist(), srgb(235, 104, 52), 0.02)
+    drawn.append(tube("plan on the floor", [(x, y, spec["floor"] + 0.02) for x, y, _z in path], srgb(235, 104, 52), 0.012, emission=0.6))
+if "bodies" in spec:
+    for number, (one, own) in enumerate(zip(shown, all_verts)):
+        middle = own.mean(1)[::3]
+        drawn.append(tube(f"trace {number}", [(x, y, spec["floor"] + 0.02 + 0.004 * number) for x, y, _z in middle], srgb(*one["colour"]), 0.018, emission=0.8))
 
 camera_data = bpy.data.cameras.new("camera")
 camera = bpy.data.objects.new("camera", camera_data)
@@ -136,7 +159,7 @@ def see_through(on: bool) -> None:
 
 # 1. from above and behind; what lies above this storey (the next floor, its furniture) would hide the room and is left out
 see_through(True)
-above = [obj for obj in bpy.data.objects if obj.type == "MESH" and obj.name not in ("body",)
+above = [obj for obj in bpy.data.objects if obj.type == "MESH" and obj not in people
          and min((obj.matrix_world @ Vector(corner)).z for corner in obj.bound_box) > spec["floor"] + 2.2]
 for obj in above:
     obj.hide_render = True
@@ -146,16 +169,32 @@ camera.location = Vector(spec["eye"])
 camera.rotation_euler = (centre - camera.location).to_track_quat("-Z", "Y").to_euler()
 (work / "third").mkdir(exist_ok=True)
 for f in range(len(verts)):
-    mesh.vertices.foreach_set("co", verts[f].reshape(-1))
-    mesh.update()
+    pose(f)
     scene.render.filepath = str(work / "third" / f"{f:04d}.png")
     bpy.ops.render.render(write_still=True)
+
+if "top_size" in spec:  # the same from straight above
+    scene.render.resolution_x, scene.render.resolution_y = spec["top_size"]
+    camera_data.type = "ORTHO"
+    camera_data.ortho_scale = spec["top_width"]
+    camera.location = Vector((centre.x, centre.y, spec["floor"] + 2.1))
+    camera.rotation_euler = (0.0, 0.0, 0.0)
+    (work / "top").mkdir(exist_ok=True)
+    for f in range(len(verts)):
+        pose(f)
+        scene.render.filepath = str(work / "top" / f"{f:04d}.png")
+        bpy.ops.render.render(write_still=True)
+    camera_data.type = "PERSP"
+if "path" not in spec:
+    print("rendered", len(verts), "frames")
+    raise SystemExit
 
 # 2. from the planned camera
 see_through(False)
 for obj in above:
     obj.hide_render = False
-body.hide_render = True
+for body in people:
+    body.hide_render = True
 plan.hide_render = True
 scene.render.resolution_x, scene.render.resolution_y = spec["first_size"]
 camera_data.sensor_fit = "HORIZONTAL"
