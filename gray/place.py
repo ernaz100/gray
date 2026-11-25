@@ -126,9 +126,15 @@ def joints(args: argparse.Namespace) -> None:
     decoder = Decoder(device)
     out = np.zeros((len(d["latent"]), 22, 3), dtype=np.float16)
     used = sorted({(a, b) for _name, a, b, _s in HmlMoments(args.hml).samples})
+    latent, pelvis, yaw = d["latent"], d["pelvis"], d["yaw"]
+    by_length: dict[int, list[int]] = {}
     for a, b in used:
-        own = np.concatenate([d["latent"][a:b], d["pelvis"][a:b][:, [0, 2]], np.sin(d["yaw"][a:b])[:, None], np.cos(d["yaw"][a:b])[:, None]], axis=1)
-        out[a:b] = decoder.joints(torch.from_numpy(own.astype(np.float32))[None].to(device))[0].cpu().numpy()
+        by_length.setdefault(b - a, []).append(a)
+    for length, starts in sorted(by_length.items()):  # motions of one length are decoded together
+        for first in range(0, len(starts), 64):
+            rows = np.array(starts[first : first + 64])[:, None] + np.arange(length)[None]
+            own = np.concatenate([latent[rows], pelvis[rows][..., [0, 2]], np.sin(yaw[rows])[..., None], np.cos(yaw[rows])[..., None]], axis=-1)
+            out[rows] = decoder.joints(torch.from_numpy(own.astype(np.float32)).to(device)).cpu().numpy()
     np.save(args.hml / "joints.npy", out)
     print(f"wrote {args.hml / 'joints.npy'}: the joints of {len(used):,d} motions", flush=True)
 
