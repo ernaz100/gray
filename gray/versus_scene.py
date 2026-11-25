@@ -265,7 +265,7 @@ def floor(args: argparse.Namespace) -> None:
         back = -travel / np.linalg.norm(travel) if np.linalg.norm(travel) > 0.3 else np.array([0.0, -1.0])
         side = np.array([-back[1], back[0]])
         eye = [centre[0] + (back[0] * 0.8 + side[0] * 0.6) * (spread * 0.6 + 3.2), centre[1] + (back[1] * 0.8 + side[1] * 0.6) * (spread * 0.6 + 3.2), note["floor"] + 2.2 + spread * 0.45]
-        (work / "scene.json").write_text(json.dumps({"colours": [linear(c) for c in (COLOURS[0], COLOURS[1], (0, 131, 0))], "centre": centre, "eye": eye, "size": [1100, 760], "lens": 32, "floor": note["floor"]}))
+        (work / "scene.json").write_text(json.dumps({"colours": [linear(c) for c in (COLOURS[0], COLOURS[1], (0, 131, 0))], "centre": [float(v) for v in centre], "eye": [float(v) for v in eye], "size": [1100, 760], "lens": 32, "floor": note["floor"]}))
         subprocess.run([args.blender, "-b", "-P", str(Path(__file__).with_name("versus_blender.py")), "--", str(work)], check=True, stdout=subprocess.DEVNULL)
         (work / "page").mkdir(exist_ok=True)
         shown = ["#%02x%02x%02x" % c for c in (COLOURS[0], COLOURS[1], (0, 131, 0))]

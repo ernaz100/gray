@@ -245,6 +245,12 @@ td.best { font-weight: 600; }
   </table>
   <p class="small">Joint distance over 5 s. Ours as a full sample for generation and forecasting, the low-noise setting for reconstruction. After aligning the pose the two are level in all three (8.1 to 8.2 cm, 8.0 to 8.1 cm, 5.6 to 5.9 cm). One saved sample of UniEgoMotion per task.</p>
 
+  <div class="grid">
+    <div class="card"><video controls muted loop playsinline preload="metadata" src="media/uem-dance.mp4"></video>
+      <div class="cap"><div class="h">Generation from the first frame: recorded (grey), ours (blue), UniEgoMotion (green)</div>
+      <div class="p">One of six clips, on a plain floor: this data has no scene geometry. In four of the six UniEgoMotion's body stays within 10 cm of where it starts; the room it was recorded in follows when Ego-Exo4D access is there.</div></div></div>
+  </div>
+
   <h2>Against EgoPriMo, on held-out Nymeria homes</h2>
   <p>1,500 held-out samples. Both models are given the frame at now and one sentence; the first 5 s are scored. EgoPriMo is our reimplementation (no code or weights were released).</p>
   <table>
