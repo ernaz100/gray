@@ -1417,3 +1417,35 @@ What candidate subsets keep (a 7 s sample every second; with one given frame 5.1
 
 For comparison, Nymeria's navigation subset has 39,130 training samples. Of the motions that
 travel, 27 % mention turning, 11 % running, 7 % jumping, 6 % stairs.
+
+### The body model trained with HumanML3D mixed in (`motion-v2`, `motion-v3`; 24 to 25 Nov, jobs 13656547 to 13656556)
+
+`gray/hml.py: HmlMoments` gives HumanML3D motions as samples (27,192 samples of 7,498 motions of
+its training split that are 5.1 s or longer and travel 1 m or further). The body model takes a
+learned token in place of their images, and optionally in place of their head path. 30 % of the
+training samples came from HumanML3D; everything else as `motion-v1`. Each run was four 1-hour
+jobs on the main partition; the first ones started within a minute of submission.
+
+Two measures of the feet that need no recorded motion were added to `gray/chain.py`: how fast a
+toe moves over the ground while it is within 5 cm of its lowest height in the clip, and how high
+the lower toe is above the clip's lowest point. The first is loose (recorded bodies score
+25.5 cm/s, since a toe pushing off counts as down) and is read against the recorded value.
+
+On 755 held-out moments, along the recorded head path, 4 steps and noise 0.3:
+
+| Run | HumanML3D head path | Pelvis | without past body | Yaw | Latent | Toes slide | Lower toe above lowest |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Recorded bodies | | | | | | 25.5 cm/s | 2.7 cm |
+| `motion-v1` | no HumanML3D | 4.7 cm | 6.0 cm | 7.3 | 0.47 | 30.2 cm/s | 2.2 cm |
+| `motion-v2` | masked | 5.2 cm | 6.6 cm | 7.4 | 0.47 | 30.6 cm/s | 2.1 cm |
+| `motion-v3` | given | 4.7 cm | 6.1 cm | 7.0 | 0.45 | 30.6 cm/s | 2.3 cm |
+
+- Mixing in HumanML3D did not improve the motion by any of these measures. The feet slide as
+  much as before, about a fifth more than recorded bodies.
+- With the head path masked, the pelvis is placed half a centimetre worse: 30 % of the samples
+  no longer teach following a head path. With it given, nothing is lost and yaw and latent are
+  marginally better (within what a different seed could give; not tested).
+- Along generated head paths and when rolled forward, all three behave alike: the head joint
+  stays 13 cm from the planned camera, no drift.
+- Not shown by these numbers: how the motion looks. Pictures of the same moments from the three
+  models are the next check, before concluding that HumanML3D does not help.

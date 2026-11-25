@@ -23,10 +23,11 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 
 ## Next
 
-- [ ] **Mixed training of the body model.** 30 % of the samples from HumanML3D. `motion-v2`: their head path masked;
-      `motion-v3`: their head path given. Compare with `motion-v1` on the held-out homes, with the checks of
-      `gray/chain.py` including the foot measures. Not yet: a variant with the head path roughened; the head-path model
-      (not trained on HumanML3D for now, since its made-up head paths would be targets there).
+- [x] **Mixed training of the body model** (`motion-v2` masked, `motion-v3` given; 25 Nov). No gain on held-out homes by
+      our measures: pelvis 5.2 and 4.7 cm against 4.7 cm, feet slide as before (30.6 against 30.2 cm/s; recorded 25.5).
+- [ ] **Look at the motion** of `motion-v1` and `motion-v3` on the same moments (videos), since the numbers may not show
+      quality; and tighten the foot-slide measure, which counts a toe pushing off as down.
+- [ ] If HumanML3D is to be pursued: a larger share, the head path roughened, or pretraining on it and then Nymeria.
 - [ ] **Rejection sampling into real scenes.** Place a HumanML3D motion at a recorded starting frame
       in a Nymeria home; keep it if its path goes through nothing on that home's map. Train with
       these as extra samples that have a real image.
@@ -57,8 +58,7 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 
 ## Running
 
-- `motion-v2` (jobs 13656547 to 13656550, checks 13656551) and `motion-v3` (13656552 to 13656555, checks 13656556) on Viper.
-- The checks with the foot measures for `motion-v1` (13656546).
+- UniEgoMotion's own evaluation with the released weights, on the workstation (about 1.5 h per task).
 
 ## Parked
 
