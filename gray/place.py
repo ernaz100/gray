@@ -15,7 +15,9 @@ A motion fits a frame when, over the 5 s after now (every 0.2 s):
     not blocked   neither the camera nor the pelvis lies in a blocked cell of the map
     walked        and both lie where somebody has walked in the recordings (stricter: the map knows no floor elsewhere)
     body          and no part of the body is inside a wall or inside something that stands there: all 22 joints and the middles
-                  of the 21 bones between them, against the walls of the map and against **solid**
+                  of the 21 bones between them against the walls of the map (of the storey the camera is on), and all but the
+                  arms and hands against **solid** (hands and elbows do rest on things: 39 % of recorded bodies have a hand in a
+                  solid cube within 5 s, 3 to 5 % a leg or the trunk)
     height        and the motion's camera at now is within 10 cm of the recorded camera's height (the image was taken from there)
 
 **solid** is the 3D counterpart of the blocked cells of gray/ground.py, from the same measured points: a 10 cm cube is
@@ -56,6 +58,7 @@ CUBE = 0.10  # metres
 FLOOR = 0.15  # metres above a floor that are not solid
 PARENTS = [-1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 12, 13, 14, 16, 17, 18, 19]  # of the 22 joints
 _PARTS = {"trunk and head": [0, 3, 6, 9, 12, 13, 14, 15], "upper legs and knees": [1, 2, 4, 5], "lower legs and feet": [7, 8, 10, 11], "upper arms": [16, 17, 18, 19], "forearms and hands": [20, 21]}
+CORE = np.array([j not in (16, 17, 18, 19, 20, 21) for j in list(range(22)) + list(range(1, 22))])  # of the 43 body points: all but the arms
 GROUPS = {name: joints + [21 + j for j in joints if j > 0] for name, joints in _PARTS.items()}  # with the middle of the bone that ends in each joint
 
 
@@ -241,9 +244,12 @@ def pairs(args: argparse.Namespace) -> None:
                 cell = np.floor((world[:, :2] - d["origin"]) / 0.05).astype(int)
                 rows_, cols_ = d["wall"].shape[1:]
                 ok = (cell[:, 0] >= 0) & (cell[:, 0] < cols_) & (cell[:, 1] >= 0) & (cell[:, 1] < rows_)
-                wall = ok & d["wall"].any(0)[np.clip(cell[:, 1], 0, rows_ - 1), np.clip(cell[:, 0], 0, cols_ - 1)]
+                storey = np.abs(floor[:, None] - d["levels"][None]).argmin(1)  # the walls of the storey the camera stands on
+                level = np.broadcast_to(storey.reshape(-1, *[1] * (points.ndim - 2)), points.shape[:-1]).reshape(-1)
+                wall = ok & d["wall"][level, np.clip(cell[:, 1], 0, rows_ - 1), np.clip(cell[:, 0], 0, cols_ - 1)]
                 clear.wall, clear.solid = wall.reshape(points.shape[:-1]), things.inside(world).reshape(points.shape[:-1])  # kept for the breakdown of the recorded bodies
-                return ~(clear.wall | clear.solid).any(-1)
+                core = np.tile(CORE, points.shape[-2] // 43)  # arms and hands may touch what stands there
+                return ~(clear.wall.any(-1) | (clear.solid & core).any(-1))
 
             # what the recorded 5 s of these frames do under the same rules (camera only)
             own_path = frames.anchor(here, torch.zeros(len(own), dtype=torch.long))[:, steps, :3].double().numpy()
