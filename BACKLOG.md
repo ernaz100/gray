@@ -31,11 +31,10 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 - [ ] **Rejection sampling into real scenes.** Place a HumanML3D motion at a recorded starting frame
       in a Nymeria home; keep it if its path goes through nothing on that home's map. Train with
       these as extra samples that have a real image.
-- [ ] **EgoPriMo as a baseline** (user, 24 Nov: compare on the first 5 s). The earlier reimplementation trained on all
-      of Nymeria exists (`/ptmp/enazaren/nymeria/ego_runs/egoprimo/all-medium-v1`, 500,000 steps, same held-out homes;
-      generation: joints 70.8 cm on 8 s clips). Score both on the same held-out starting frames, from one given frame and
-      the text, cut to 5 s. Open: it was trained with all sentences that overlap an 8 s window, ours with one sentence
-      per 5 s; how to make that fair (same text for both, or retrain it on moments).
+- [x] **EgoPriMo as a baseline** (`gray/versus_egoprimo.py`, 25 Nov): on 1,500 held-out moments, at the same amount of
+      movement, our chain is a third nearer to the recorded body (52.3 against 76.5 cm) and goes through something half as
+      often (12.6 against 27.1 %). It is our reimplementation, used outside how it was trained.
+- [ ] Optional: retrain the EgoPriMo reimplementation on our moments, to remove that caveat.
 - [ ] **UniEgoMotion as a baseline** (user, 24 Nov: take it as released, and train a version of ours on the data it
       uses). On the MPI cluster under `/scratch/inf0/user/enazaren`: its code, the released weights
       (`UniEgoMotion/exp/uem_v4b_dinov2/last.ckpt`), and its processed data (`ee4d/uniegomotion`, 36 GB: motion for
@@ -50,7 +49,8 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
   - [x] our chain against UniEgoMotion on its validation clips (`gray/versus_uem.py`, Viper): level with it or slightly ahead when
         sampled in full (joints 32.3 against 33.9 cm, travel 0.72 against 0.59 m; recorded 0.76 m). Standing still beats both
         on joint distance, so that measure alone is not used any more.
-  - [ ] measures that do not reward caution (how the bodies move, as distributions over clips); several seeds
+  - [x] three seeds: ours 32.3 to 32.6 cm against 33.9 cm
+  - [ ] measures that do not reward caution, as distributions over clips
   - note: its repository has a two-stage configuration (a trajectory model, then motion), the same order as our chain
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
       and whether the feet are on the floor.
@@ -78,6 +78,8 @@ Nothing.
 - [ ] Comparator: the moved-furniture test in Loc_08; connecting it to the chain; what to do after a surprise.
 - [ ] A scene that really changes (edited real frames, a renderer, or a robot).
 - [ ] Choosing among several drawn head paths.
+- [x] How far the planner's paths go at each noise setting (`gray/travel.py`): less noise shortens the path by a fifth but moves
+      its end by 9 %; generated paths are a quarter shorter than recorded ones at the planner's setting.
 - [ ] How much of the "goes through something" rate is staircases, which the flat maps mark as blocked.
 - [ ] More homes for reading unseen rooms: repeat the Ropedia test when the dataset is complete.
 - [ ] The camera of the target robot.

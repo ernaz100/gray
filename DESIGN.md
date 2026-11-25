@@ -1548,3 +1548,57 @@ over its 8 s gives 39.0 cm here, 37.6 cm in its own evaluation on all clips.
   (travel, share that goes, sliding) next to any distance, with a standing-still row; and choose
   the sampling per use: low noise for a planner that should be safe, a full sample when the
   spread of what people do is what is judged.
+
+### Our chain against the EgoPriMo reimplementation on held-out moments (25 Nov, `gray/versus_egoprimo.py`, job 13680414)
+
+1,500 held-out moments of the navigation subset with a body and a map; both sides are given the
+frame at now and the one sentence; the first 5 s; bodies decoded to the same 22 joints; the
+reference is the recorded body through the same encoder and decoder. EgoPriMo: the
+reimplementation of the STEER repository trained on all of Nymeria (`all-medium-v1`, its state
+with the lowest validation loss, step 200,000), 50 sampling steps. Ours: `head-v5` and `motion-v1`.
+
+| | Joints | Aligned | Head | Pelvis | Travels | 1 m or more | Through something | Toes slide |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Recorded | | | | | 1.97 m | 75 % | 3.9 % | 26.5 cm/s |
+| Standing still | 83.9 cm | 8.1 cm | 86.1 cm | 81.2 cm | 0 | 0 % | | |
+| EgoPriMo reimplementation | 76.5 cm | 10.2 cm | 76.4 cm | 73.3 cm | 1.49 m | 57 % | 27.1 % | 23.5 |
+| Ours, only the frame at now, usual sampling (4 steps, noise 0.5 and 0.3) | 52.3 cm | 8.0 cm | 51.6 cm | 49.6 cm | 1.50 m | 63 % | 12.6 % | 28.5 |
+| Ours, only the frame at now, a full sample (20 steps, noise 1) | 61.9 cm | 9.3 cm | 61.4 cm | 58.8 cm | 2.11 m | 82 % | 26.1 % | 38.2 |
+| Ours, with the 2 s before now, usual sampling | 46.4 cm | 6.6 cm | 47.2 cm | 44.3 cm | 1.53 m | 64 % | 12.5 % | 29.3 |
+
+- At the same amount of movement (1.50 against 1.49 m) our chain is a third nearer to the
+  recorded body (52.3 against 76.5 cm) and goes through something half as often (12.6 against
+  27.1 %). Standing still is the worst row here, since on these moments people walk: distance is
+  a meaningful measure on this set.
+- With text, our low-noise setting still moves (1.50 m; without text on UniEgoMotion's data
+  0.22 m). A full sample overshoots on Nymeria: it travels further than people, slides more and
+  goes through things as often as EgoPriMo. The usual setting stays the one to use with text.
+- Limits: it is our reimplementation, not the authors' model (none was released); it is used
+  outside how it was trained (8 s windows cut anywhere, all overlapping sentences, generation as
+  one of three tasks); it is given the fisheye frame's feature, ours the pinhole view and the
+  image grid; one run, one seed.
+
+### How far the Nymeria planner's paths go at each sampling setting (25 Nov, `gray/travel.py`, job 13680463)
+
+`head-v5`, 3,000 held-out moments that go 1 m or further, with the 2 s before now:
+
+| Sampling | Path length | of recorded | Ends this far from the start | Ends 1 m or further away | Goes through something (earlier runs) |
+|---|---:|---:|---:|---:|---:|
+| Recorded | 2.76 m | 100 % | 2.02 m | 91 % | 7.3 % |
+| 20 steps, noise 1 | 2.53 m | 92 % | 1.88 m | 82 % | 33.7 % |
+| 4 steps, noise 1 | 2.38 m | 86 % | 1.84 m | 82 % | 28.5 % |
+| 4 steps, noise 0.5 | 2.05 m | 74 % | 1.72 m | 81 % | 17.5 % |
+| 4 steps, noise 0 | 1.96 m | 71 % | 1.69 m | 80 % | 13.9 % |
+
+Less noise shortens the path by a fifth (2.53 to 2.05 m) but moves its end by only 9 % (1.88 to
+1.72 m), and as many paths as before end 1 m or further away. So the halving of "goes through
+something" is mostly paths that wander less on the way to about the same place, and only to a
+small part paths that go less far. At every setting generated paths are shorter than recorded
+ones; with the planner's setting by a quarter.
+
+### The UniEgoMotion comparison with three seeds (jobs 13680004, 13680464, 13680465)
+
+Our chain as a full sample: joints 32.3, 32.6 and 32.6 cm, travel 0.72, 0.72 and 0.73 m. Against
+UniEgoMotion's 33.9 cm (one saved sample of its own). Our spread over seeds is 0.3 cm, so the
+1.3 to 1.6 cm in our favour is not an accident of our sampling; whether it exceeds the spread of
+UniEgoMotion's sampling is not known, since its predictions take 1.5 h per run to make.
