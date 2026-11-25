@@ -74,8 +74,13 @@ class HmlMoments(torch.utils.data.Dataset):
         return len(self.samples)
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+        return self.item(index)
+
+    def item(self, index: int, now: int | None = None) -> dict[str, torch.Tensor]:
+        """The sample; ``now``: with this frame of hml.npz as now (gray/place.py) in place of a random one of the sample's stretch."""
         name, a, b, s = self.samples[index]
-        now = a + min(s + int(torch.randint(0, 15, (1,))), b - a - 76)  # the frame at now; 75 frames follow it
+        if now is None:
+            now = a + min(s + int(torch.randint(0, 15, (1,))), b - a - 76)  # the frame at now; 75 frames follow it
         rows = np.clip(np.arange(now - 29, now + 76), a, b - 1)  # frames before the motion begins repeat its first one; they are not shown
         own = np.concatenate([self.latent[rows], self.pelvis[rows][:, [0, 2]], np.sin(self.yaw[rows])[:, None], np.cos(self.yaw[rows])[:, None]], axis=1)
         first, last = self.index[name][int(torch.randint(0, len(self.index[name]), (1,)))]
