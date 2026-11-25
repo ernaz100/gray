@@ -178,7 +178,7 @@ td.best { font-weight: 600; }
 <body>
 
 <header>
-  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 25 November 2026.</div>
+  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 25 November 2026, evening. Taking over the project: start with HANDOFF.md in the repository.</div>
   <nav id="tabs"></nav>
 </header>
 <main id="panels">
@@ -192,28 +192,28 @@ td.best { font-weight: 600; }
     <tr><td><b>1 · Head path</b> (head-v5)</td><td><span class="state ok">works</span></td><td>17.5 % of 5 s paths go through something (recorded 7.3 %); goes when told 85.5 % (people 92.0 %)</td><td>Paths are a quarter shorter than recorded ones; stairs</td></tr>
     <tr><td><b>3 · Body</b> (motion-v1)</td><td><span class="state ok">works along a given path</span></td><td>pelvis 4.7 cm from recorded; 8.7 cm joint distance along the true head path on UniEgoMotion's data</td><td>Feet slide a little more than recorded (30 against 26 cm/s)</td></tr>
     <tr><td><b>The chain</b> (1 then 3)</td><td><span class="state ok">compared with both baselines</span></td><td>see the two tables below</td><td>Videos in scenes; measures that do not reward standing still</td></tr>
-    <tr><td><b>HumanML3D for motion quality</b></td><td><span class="state go">in progress</span></td><td>Mixing it in without images: no gain. Placing motions into real rooms: 1 draw in 15 fits with the whole-body rule, 36,766 pairs</td><td>head-v7 and motion-v4 are training on the pairs</td></tr>
+    <tr><td><b>HumanML3D for motion quality</b></td><td><span class="state">no gain</span></td><td>Tried three ways, last by placing its motions into real rooms (36,766 pairs that fit): head-v7 and motion-v4 are no better than head-v5 and motion-v1</td><td>Stop, or try a measure of motion variety</td></tr>
     <tr><td><b>2 · Comparator</b></td><td><span class="state">parked</span></td><td>compare-v3: 13 to 16 % false alarms on an unchanged place, 91 % alarms in a different scene</td><td>Resumes after the comparisons</td></tr>
   </table>
 
   <h2>Right now</h2>
   <div class="board">
     <div class="col run"><h4>Running</h4>
-      <div class="it"><b>head-v7</b><span>Viper, 1-hour jobs. Head path trained with 30 % HumanML3D motions placed into recorded frames.</span></div>
-      <div class="it"><b>motion-v4</b><span>Viper, 1-hour jobs. Body model, the same.</span></div>
+      <div class="it"><b>Nothing</b><span>No jobs on the clusters, nothing on the workstation.</span></div>
     </div>
     <div class="col you"><h4>Waiting on a decision or access</h4>
       <div class="it"><b>Ego-Exo4D access</b><span>Pending. Needed to show UniEgoMotion in the rooms it was trained on (video and point cloud per recording).</span></div>
-      <div class="it"><b>Retrain EgoPriMo on our samples?</b><span>Removes the caveat that it is used outside how it was trained. Suggested: only before a write-up.</span></div>
-      <div class="it"><b>HumanML3D videos</b><span>motion-v1 against motion-v3 side by side: not yet judged by eye.</span></div>
+      <div class="it"><b>HumanML3D: stop or change approach?</b><span>Three tries without a gain. Untried: a measure of motion variety; placed motions with history; pretraining.</span></div>
     </div>
     <div class="col"><h4>Next</h4>
-      <div class="it"><b>Score head-v7 and motion-v4</b><span>Against head-v5 and motion-v1, on held-out homes.</span></div>
-      <div class="it"><b>EgoPriMo with our sampling</b><span>Few steps and reduced noise on both sides; at full noise we go through things as often as it does.</span></div>
+      <div class="it"><b>Several samples of UniEgoMotion</b><span>Its spread is unknown: one saved sample per clip.</span></div>
+      <div class="it"><b>UniEgoMotion in its rooms</b><span>When Ego-Exo4D access is there.</span></div>
       <div class="it"><b>UniEgoMotion against ours as video</b><span>On its validation clips; plain floor until the rooms are available.</span></div>
       <div class="it"><b>Raven in sync with Viper</b><span>When Raven is back up.</span></div>
     </div>
     <div class="col done"><h4>Done on 24 and 25 November</h4>
+      <div class="it"><b>head-v7 and motion-v4</b><span>Trained with the placed pairs: no gain over head-v5 and motion-v1.</span></div>
+      <div class="it"><b>UniEgoMotion, all three tasks</b><span>Level or slightly ahead in each; plain-floor videos.</span></div>
       <div class="it"><b>Rejection sampling, whole body</b><span>36,766 pairs of a recorded frame and a HumanML3D motion that fits the room.</span></div>
       <div class="it"><b>Scene videos</b><span>8 random samples in Loc_08, ours against EgoPriMo.</span></div>
       <div class="it"><b>Comparison with UniEgoMotion</b><span>Level or slightly ahead on its own data, in all three of its tasks.</span></div>
@@ -637,10 +637,10 @@ td.best { font-weight: 600; }
       <li><b>They belong to the first second,</b> where the model is most sure and two views of an unchanged place differ by more than it allows for: hands, people, objects being handled. Two seconds ahead the rate is 9 %, four seconds ahead 6 %.</li>
     </ul></div>
 
-  <h2>In flight</h2>
+  <h2>Parked (since 24 November)</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
-    <tr><td><b>compare-v4</b>: half of the target frames replaced by a revisit of the same place</td><td>Does the model's own uncertainty learn how much an unchanged place varies, and bring the false alarms down?</td></tr>
+    <tr><td><b>compare-v4</b>: half of the target frames replaced by a revisit of the same place; stopped at 2,500 of 20,000 steps, resumes from its state</td><td>Does the model's own uncertainty learn how much an unchanged place varies, and bring the false alarms down?</td></tr>
     <tr><td><b>Moved-furniture test</b> in one home where it is known which furniture stood where in each recording</td><td>Does it notice a relevant change, not only a different scene?</td></tr>
   </table>
 </section>
@@ -732,22 +732,22 @@ td.best { font-weight: 600; }
 </section>
 
 <section data-tab="Next steps" id="next" hidden>
-  <p class="lead">Open work and open questions.</p>
+  <p class="lead">Open work and open questions. The current list is <code>BACKLOG.md</code>; how to take over is <code>HANDOFF.md</code>.</p>
 
-  <h2>In flight</h2>
+  <h2>Next, in order</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
-    <tr><td><b>Rejection sampling</b>: HumanML3D motions placed into recorded frames of real homes</td><td>Does HumanML3D help once its motions come with a real room image?</td></tr>
-    <tr><td><b>Scene videos</b> of ours against the baselines</td><td>How the motions compare by eye</td></tr>
+    <tr><td><b>HumanML3D: stop, or measure motion variety</b></td><td>Three tries brought no gain on our measures; none of them looks at the variety HumanML3D should add</td></tr>
+    <tr><td><b>Several samples of UniEgoMotion</b>, and measures that do not reward standing still</td><td>Whether being level with it holds beyond one sample</td></tr>
+    <tr><td><b>UniEgoMotion in its rooms</b> (needs Ego-Exo4D access, pending)</td><td>How both models look in the real scene</td></tr>
   </table>
 
-  <h2>Build queue</h2>
+  <h2>After the comparisons</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
     <tr><td><b>compare-v4</b>: comparator trained with revisits as targets (parked at 2,500 of 20,000 steps)</td><td>Do the false alarms on an unchanged place come down?</td></tr>
     <tr><td><b>Moved-furniture test</b> in Loc_08</td><td>Whether the comparator notices a relevant change</td></tr>
     <tr><td><b>The loop on recordings</b>: plan, step, compare, replan</td><td>How often the system would stop, and how plans evolve</td></tr>
-    <tr><td><b>A figure to look at</b>: the generated body as a moving skeleton</td><td>Whether the motion looks right, which numbers do not show</td></tr>
     <tr><td><b>A scene that can change</b>: a renderer for one home, or a robot</td><td>The comparator's real purpose; rendered image features differ strongly from real ones, which is unsolved</td></tr>
   </table>
 
