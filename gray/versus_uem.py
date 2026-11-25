@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -70,6 +71,8 @@ def main() -> None:
     parser.add_argument("--head-noise", type=float, default=0.5, help="starting noise of the head path (1: a full sample)")
     parser.add_argument("--body-noise", type=float, default=0.3, help="starting noise of the body")
     parser.add_argument("--clips", type=int, default=None)
+    parser.add_argument("--videos", type=Path, default=None, help="with the task gen: write the bodies of a few clips here, for gray/versus_scene.py floor")
+    parser.add_argument("--video-clips", type=int, default=6, help="half of them among clips where the recorded pelvis goes 1 m or further")
     parser.add_argument("--tasks", nargs="+", default=["gen"], choices=("gen", "fore", "recon"), help="UniEgoMotion's tasks: generation, forecasting, reconstruction")
     parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--seed", type=int, default=0)
@@ -90,6 +93,22 @@ def main() -> None:
         """SMPL-X parameters of one clip -> its 22 body joints (80, 22, 3) in the clip's frame."""
         given = {k: params[k].to(device).float() for k in ("global_orient", "body_pose", "betas", "transl")}
         return layer(**given).joints[:, :22]
+
+    @torch.no_grad()
+    def surface(params: dict) -> torch.Tensor:
+        given = {k: params[k].to(device).float() for k in ("global_orient", "body_pose", "betas", "transl")}
+        return layer(**given).vertices
+
+    if args.videos is not None:
+        from gray.pinhole import STEER
+        from gray.scene_worker import Mesh, about_up
+
+        sys.path.insert(0, str(STEER))
+        from data.nymeria import to_actionplan as ap
+
+        shape = Mesh(ap.MODEL, ap.rodrigues)
+        wanted = {True: args.video_clips // 2, False: args.video_clips - args.video_clips // 2}
+        notes = []
 
     data = EeMoments(args.ee4d, "val", jitter=False)
     index = {str(n): i for i, n in enumerate(data.names)}
@@ -131,6 +150,7 @@ def main() -> None:
             slides["our chain"].append(feet(made["our chain"])[0].cpu())
             slides["recorded"].append(feet(made["recorded body through our encoder"])[0].cpu())
             here = frames.matrix(past[:, NOW, 3:].double())  # camera axes in our frame, as columns
+            whole_truth = motion.body_anchored(batch)
             for b in range(batch["pose"].shape[0]):
                 key = keys[first + b]
                 camera = truth[key]["aria_traj_T"].to(device).double()
@@ -154,6 +174,27 @@ def main() -> None:
                     rows[name].append(score(placed, real[their_at]))
                     if name == "our chain":
                         moved[name].append(travel(placed))
+                goes = moved["recorded"][-1] >= 1.0
+                if args.videos is not None and task == "gen" and wanted[goes] > 0 and (first + b) % 37 == 0:  # spread over the clips
+                    wanted[goes] -= 1
+                    work = args.videos / f"clip-{len(notes)}"
+                    work.mkdir(parents=True, exist_ok=True)
+                    whole = torch.cat([whole_truth[b : b + 1, :HISTORY], chain[b : b + 1]], dim=1).float()
+                    smpl = ap.streamer272_to_smpl(decoder.codec.decode_with_root(whole[..., :32], whole[..., 32:]).cpu())
+                    begin = whole[0, 0, 32:].cpu()
+                    skin = about_up(shape.skin(smpl["poses"][0].double().numpy(), smpl["joints"][0, :, 0].double().numpy()), float(torch.atan2(begin[2], begin[3])), *begin[:2].tolist())[2 * HISTORY :]
+                    own = skin[:, shape.joints4]
+                    mine = ((np.einsum("tvkab,vb->tvka", own[..., :3], shape.vertices) + own[..., 3]) * shape.weights4[None, :, :, None]).sum(2)
+                    mine = (torch.from_numpy(mine).to(device) @ turn.T + shift).cpu().numpy()
+                    at = torch.arange(1, 151, device=device) / 3  # 30 per second, in their frames of 10 per second
+                    low, part = at.floor().long().clamp(max=49), (at - at.floor().long().clamp(max=49))[:, None, None]
+                    for k, (label, verts) in enumerate((("recorded", surface(truth[key]["smpl_params"])), ("ours", None), ("UniEgoMotion", surface(theirs[key]["smpl_params"])))):
+                        np.save(work / f"verts-{k}.npy", mine.astype(np.float32) if verts is None else (verts[low] * (1 - part) + verts[low + 1] * part).cpu().numpy().astype(np.float32))
+                        np.save(work / f"faces-{k}.npy", shape.faces if verts is None else layer.faces.astype(np.int64))
+                    notes.append({"clip": key, "floor": float(real[..., 2].min()), "bodies": {
+                        "recorded": {"travel_m": moved["recorded"][-1]}, "ours": {"travel_m": moved["our chain"][-1], "joints_cm": rows["our chain"][-1][0] * 100},
+                        "UniEgoMotion": {"travel_m": moved["UniEgoMotion"][-1], "joints_cm": rows["UniEgoMotion"][-1][0] * 100}}})
+                    (args.videos / "clips.json").write_text(json.dumps(notes, indent=1))
             print(f"  {task}: {min(first + args.batch, len(keys)):,d} clips", flush=True)
         given = {"gen": "from the first frame", "fore": "from the first 2 s (camera path and images); the 5 s after them", "recon": "UniEgoMotion is given the whole camera path and all images"}[task]
         table = {name: dict(zip(("joints_m", "aligned_m", "head_m", "pelvis_m"), np.mean(values, axis=0).tolist())) for name, values in rows.items()}

@@ -238,6 +238,65 @@ def render(args: argparse.Namespace) -> None:
         print(f"wrote {target}", flush=True)
 
 
+def floor(args: argparse.Namespace) -> None:
+    """Videos of the clips written by gray/versus_uem.py --videos: recorded, ours and UniEgoMotion on a plain floor, from the same start."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    exported, out = args.exported.expanduser(), args.out.expanduser()
+    found = subprocess.run(["fc-match", "-f", "%{file}", "sans"], capture_output=True, text=True).stdout.strip()
+
+    def font(size: int, bold: bool = False):
+        made = ImageFont.truetype(found, size) if found and Path(found).exists() else ImageFont.load_default(size)
+        try:
+            made.set_variation_by_axes([700 if bold else 400])
+        except Exception:  # noqa: BLE001  not a variable font
+            pass
+        return made
+
+    linear = lambda c: [(v / 255 / 12.92 if v / 255 <= 0.04045 else ((v / 255 + 0.055) / 1.055) ** 2.4) for v in c]  # noqa: E731
+    out.mkdir(parents=True, exist_ok=True)
+    for b, note in enumerate(json.loads((exported / "clips.json").read_text())):
+        work = exported / f"clip-{b}"
+        traces = [np.load(work / f"verts-{k}.npy").mean(1)[:, :2] for k in range(3)]
+        everywhere = np.concatenate(traces)
+        centre = [*((everywhere.min(0) + everywhere.max(0)) / 2).tolist(), note["floor"] + 0.9]
+        spread = float(np.ptp(everywhere, axis=0).max())
+        travel = traces[0][-1] - traces[0][0]
+        back = -travel / np.linalg.norm(travel) if np.linalg.norm(travel) > 0.3 else np.array([0.0, -1.0])
+        side = np.array([-back[1], back[0]])
+        eye = [centre[0] + (back[0] * 0.8 + side[0] * 0.6) * (spread * 0.6 + 3.2), centre[1] + (back[1] * 0.8 + side[1] * 0.6) * (spread * 0.6 + 3.2), note["floor"] + 2.2 + spread * 0.45]
+        (work / "scene.json").write_text(json.dumps({"colours": [linear(c) for c in (COLOURS[0], COLOURS[1], (0, 131, 0))], "centre": centre, "eye": eye, "size": [1100, 760], "lens": 32, "floor": note["floor"]}))
+        subprocess.run([args.blender, "-b", "-P", str(Path(__file__).with_name("versus_blender.py")), "--", str(work)], check=True, stdout=subprocess.DEVNULL)
+        (work / "page").mkdir(exist_ok=True)
+        shown = ["#%02x%02x%02x" % c for c in (COLOURS[0], COLOURS[1], (0, 131, 0))]
+        count = len(traces[0])
+        for f in range(count):
+            page = Image.new("RGB", (1500, 860), (249, 249, 247))
+            draw = ImageDraw.Draw(page)
+            draw.text((30, 22), "Generation from the first frame", font=font(20, True), fill=(20, 20, 20))
+            draw.text((30, 54), "UniEgoMotion's validation data, no text", font=font(14), fill=(95, 94, 90))
+            for i, line in enumerate(textwrap.wrap(note["clip"].split("___")[0].replace("_", " "), 30)[:2]):
+                draw.text((30, 96 + 24 * i), line, font=font(17, True), fill=(20, 20, 20))
+            y = 190
+            for k, label in enumerate(("recorded", "ours", "UniEgoMotion")):
+                m = note["bodies"][label]
+                draw.rectangle((30, y + 3, 46, y + 19), fill=shown[k])
+                draw.text((54, y), label, font=font(16, True), fill=(20, 20, 20))
+                draw.text((54, y + 22), f"travels {m['travel_m']:.1f} m" + ("" if label == "recorded" else f", {m['joints_cm']:.0f} cm from recorded"), font=font(13), fill=(95, 94, 90))
+                y += 58
+            draw.text((30, 420), f"{f / 30:0.1f} s", font=font(40, True), fill=(20, 20, 20))
+            draw.rectangle((30, 480, 350, 488), fill=(225, 224, 217))
+            draw.rectangle((30, 480, 30 + int(320 * (f + 1) / count), 488), fill=(42, 120, 214))
+            for i, line in enumerate(("All three start in the same place.", "Each model is given the first frame only:", "its image and, for ours, the camera's", "height and tilt.", "The floor squares are 0.5 m.",
+                                      "The room is not shown: this data has", "no scene geometry.")):
+                draw.text((30, 520 + 22 * i), line, font=font(14), fill=(95, 94, 90))
+            page.paste(Image.open(work / "frames" / f"{f:04d}.png").convert("RGB"), (380, 60))
+            page.save(work / "page" / f"{f:04d}.png")
+        target = out / f"clip-{b}.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "30", "-i", str(work / "page" / "%04d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", str(target)], check=True)
+        print(f"wrote {target}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     steps = parser.add_subparsers(dest="step", required=True)
@@ -259,8 +318,12 @@ def main() -> None:
     two.add_argument("--only", type=int, nargs="+", default=None)
     two.add_argument("--captions", type=Path, default=None, help="texts.json of gray/hml.py, for the output of gray/place.py show")
     two.add_argument("--blender", default="blender")
+    three = steps.add_parser("floor")
+    three.add_argument("--exported", type=Path, required=True)
+    three.add_argument("--out", type=Path, required=True)
+    three.add_argument("--blender", default="blender")
     args = parser.parse_args()
-    export(args) if args.step == "export" else render(args)
+    {"export": export, "render": render, "floor": floor}[args.step](args)
 
 
 if __name__ == "__main__":

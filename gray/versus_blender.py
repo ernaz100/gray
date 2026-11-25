@@ -16,7 +16,7 @@ from mathutils import Vector
 
 work = Path(sys.argv[sys.argv.index("--") + 1])
 spec = json.loads((work / "scene.json").read_text())
-faces = np.load(work / "faces.npy")
+faces = np.load(work / "faces.npy") if (work / "faces.npy").exists() else None
 bodies = [np.load(work / f"verts-{i}.npy") for i in range(len(spec["colours"]))]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -44,7 +44,7 @@ links.new(place.outputs["Object"], checker.inputs["Vector"])
 links.new(checker.outputs["Color"], nodes["Principled BSDF"].inputs["Base Color"])
 nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.9
 centre = Vector(spec["centre"])
-bpy.ops.mesh.primitive_plane_add(size=1.0, location=(centre.x, centre.y, 0.0))
+bpy.ops.mesh.primitive_plane_add(size=1.0, location=(centre.x, centre.y, spec.get("floor", 0.0)))
 ground = bpy.context.object
 ground.scale = (40, 40, 1)
 ground.data.materials.append(floor)
@@ -57,7 +57,8 @@ sun.rotation_euler = Vector((-0.4, -0.3, -1.0)).to_track_quat("-Z", "Y").to_eule
 meshes = []
 for i, (verts, colour) in enumerate(zip(bodies, spec["colours"])):
     mesh = bpy.data.meshes.new(f"body{i}")
-    mesh.from_pydata(verts[0].tolist(), [], faces.tolist())
+    own_faces = np.load(work / f"faces-{i}.npy") if (work / f"faces-{i}.npy").exists() else faces  # bodies of different meshes
+    mesh.from_pydata(verts[0].tolist(), [], own_faces.tolist())
     for poly in mesh.polygons:
         poly.use_smooth = True
     made = bpy.data.materials.new(f"body{i}")
