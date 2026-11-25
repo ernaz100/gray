@@ -149,20 +149,25 @@ class EeMoments(torch.utils.data.Dataset):
     """
 
     def __init__(self, folder: Path, split: str, every: int = 15, jitter: bool = True, starts: list[tuple[int, int]] | None = None) -> None:
-        d = np.load(folder / f"gray_{split}.npz")
+        apart = folder / f"gray_{split}"
+        if apart.is_dir():  # one file per array (the unpack step): read from disk as needed, so that loader processes share them
+            d = {key: np.load(apart / f"{key}.npy", mmap_mode="r") for key in ("latent", "pose", "pelvis", "yaw")} | {key: np.load(apart / f"{key}.npy") for key in ("start", "names")}
+        else:
+            d = np.load(folder / f"gray_{split}.npz")
         self.latent, self.pose, self.pelvis, self.yaw = d["latent"], d["pose"], d["pelvis"], d["yaw"]
         self.image = np.load(folder / f"gray_{split}_image.npy", mmap_mode="r")
         self.names, self.start, self.jitter, self.every = d["names"], d["start"], jitter and starts is None, every
         if starts is not None:
-            self.samples = [(i, int(self.start[i]), int(self.start[i + 1]), s) for i, s in starts]
+            picked = [(i, int(self.start[i]), int(self.start[i + 1]), s) for i, s in starts]
         else:
-            self.samples = [(i, int(a), int(b), int(s)) for i, (a, b) in enumerate(zip(self.start[:-1], self.start[1:])) if b - a >= 76 for s in range(0, b - a - 76 + 1, every)]
+            picked = [(i, int(a), int(b), int(s)) for i, (a, b) in enumerate(zip(self.start[:-1], self.start[1:])) if b - a >= 76 for s in range(0, b - a - 76 + 1, every)]
+        self.samples = np.array(picked, dtype=np.int64).reshape(-1, 4)  # an array, not a list of tuples: loader processes then share it
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
-        segment, a, b, s = self.samples[index]
+        segment, a, b, s = (int(v) for v in self.samples[index])
         now = a + min(s + (int(torch.randint(0, self.every, (1,))) if self.jitter else 0), b - a - 76)
         rows = np.clip(np.arange(now - 29, now + 76), a, b - 1)
         own = np.concatenate([self.latent[rows], self.pelvis[rows][:, [0, 2]], np.sin(self.yaw[rows])[:, None], np.cos(self.yaw[rows])[:, None]], axis=1)
@@ -171,16 +176,26 @@ class EeMoments(torch.utils.data.Dataset):
                 "body_known": torch.tensor(True), "foreign": torch.tensor(False), "history_max": torch.tensor(min(now - a + 1, 30))}
 
 
+def unpack(args) -> None:
+    """Write the arrays of gray_<split>.npz as one file each into gray_<split>/, for reading from disk as needed."""
+    d = np.load(args.data / "ee4d" / f"gray_{args.split}.npz")
+    target = args.data / "ee4d" / f"gray_{args.split}"
+    target.mkdir(exist_ok=True)
+    for key in d.files:
+        np.save(target / f"{key}.npy", d[key])
+    print(f"wrote {len(d.files)} arrays to {target}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("step", choices=("convert",))
+    parser.add_argument("step", choices=("convert", "unpack"))
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--steer", type=Path, default=Path("/u/enazaren/projects/STEER"))
     parser.add_argument("--split", choices=("train", "val"), default="val")
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
     args.data, args.steer = args.data.expanduser(), args.steer.expanduser()
-    convert(args)
+    {"convert": convert, "unpack": unpack}[args.step](args)
 
 
 if __name__ == "__main__":
