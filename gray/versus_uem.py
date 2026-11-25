@@ -103,7 +103,9 @@ def main() -> None:
     generator = torch.Generator(device=device).manual_seed(args.seed)
     ours_at = np.arange(3, 76, 3) - 1  # of our 75 generated frames (15 per second), those at 0.2, 0.4, ..., 5.0 s
     their_at = np.arange(2, 51, 2)  # the same instants at 10 per second
-    rows = {name: [] for name in ("UniEgoMotion", "UniEgoMotion, 8 s", "our chain", "our body, recorded head path", "recorded body through our encoder")}
+    rows = {name: [] for name in ("UniEgoMotion", "UniEgoMotion, 8 s", "our chain", "our body, recorded head path", "recorded body through our encoder",
+                                  "standing still (the first frame's body, held)")}
+    moved = {name: [] for name in ("recorded", "UniEgoMotion", "our chain")}  # how far the pelvis travels in the 5 s (m)
     slides = {"recorded": [], "our chain": []}
     for first in range(0, len(keys), args.batch):
         batch = to_device(collate([clips[i] for i in range(first, min(first + args.batch, len(keys)))]), device)
@@ -132,14 +134,23 @@ def main() -> None:
             both = min(len(real), len(guess))  # some clips at the end of a segment are shorter than 8 s
             rows["UniEgoMotion"].append(score(guess[their_at], real[their_at]))
             rows["UniEgoMotion, 8 s"].append(score(guess[:both], real[:both]))
+            rows["standing still (the first frame's body, held)"].append(score(real[:1].expand(len(their_at), -1, -1), real[their_at]))
+            travel = lambda joints: float((joints[1:, 0, :2] - joints[:-1, 0, :2]).norm(dim=-1).sum())  # noqa: E731  on the ground (z is up here)
+            moved["recorded"].append(travel(real[np.append(0, their_at)]))
+            moved["UniEgoMotion"].append(travel(guess[np.append(0, their_at)]))
             for name, joints in made.items():
-                rows[name].append(score(joints[b, ours_at].double() @ turn.T + shift, real[their_at]))
+                placed = joints[b, ours_at].double() @ turn.T + shift
+                rows[name].append(score(placed, real[their_at]))
+                if name == "our chain":
+                    moved[name].append(travel(placed))
         print(f"  {min(first + args.batch, len(keys)):,d} clips", flush=True)
 
     result = {name: dict(zip(("joints_m", "aligned_m", "head_m", "pelvis_m"), np.mean(values, axis=0).tolist())) for name, values in rows.items()}
-    print(f"\n{len(keys):,d} clips, the first 5 s, every 0.2 s, 22 body joints (m)\n  {'':38s} joints  aligned    head  pelvis")
+    print(f"\n{len(keys):,d} clips, the first 5 s, every 0.2 s, 22 body joints (m)\n  {'':46s} joints  aligned    head  pelvis")
     for name, r in result.items():
-        print(f"  {name:38s} {r['joints_m']:6.3f} {r['aligned_m']:8.3f} {r['head_m']:7.3f} {r['pelvis_m']:7.3f}")
+        print(f"  {name:46s} {r['joints_m']:6.3f} {r['aligned_m']:8.3f} {r['head_m']:7.3f} {r['pelvis_m']:7.3f}")
+    result["pelvis_travel_m"] = {name: {"mean": float(np.mean(values)), "median": float(np.median(values)), "over_1m": float(np.mean(np.array(values) >= 1.0))} for name, values in moved.items()}
+    print("\nhow far the pelvis travels in the 5 s: " + "; ".join(f"{name} {r['mean']:.2f} m on average, 1 m or more in {r['over_1m']:.0%}" for name, r in result["pelvis_travel_m"].items()))
     result["foot_slide_cm_s"] = {name: float(torch.cat(values).mean()) for name, values in slides.items()}
     print(f"\ntoes slide while down (gray/chain.py): our chain {result['foot_slide_cm_s']['our chain']:.1f} cm/s, the recorded body through our encoder {result['foot_slide_cm_s']['recorded']:.1f} cm/s")
     (args.body_run / "versus_uem.json").write_text(json.dumps(result, indent=1))
