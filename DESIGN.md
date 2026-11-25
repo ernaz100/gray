@@ -1508,3 +1508,43 @@ the dataset was changed to read its arrays from disk), so the cause was not the 
 as such; it was not found. The temporary working copy was lost with the first crash; the code now
 lives in the clone on the workstation and is pushed from there. Rule since: agree with the user
 where a computation runs; no training on the workstation by day.
+
+### Our chain against UniEgoMotion on its validation clips (25 Nov, `gray/versus_uem.py`, jobs 13679602, 13680004, 13680005)
+
+Generation from the first frame of a clip, on the 3,678 of UniEgoMotion's 4,405 validation
+clips that are in our converted data and have 5 s. Both sides as the same 22 joints (theirs and
+the recorded body through SMPL-X, ours decoded and moved into the clip's frame through the camera
+pose of the first frame), every 0.2 s over the first 5 s. Check of the conversion: UniEgoMotion
+over its 8 s gives 39.0 cm here, 37.6 cm in its own evaluation on all clips.
+
+| | Joints | Aligned | Head | Pelvis | Pelvis travels | 1 m or more |
+|---|---:|---:|---:|---:|---:|---:|
+| Recorded | | | | | 0.76 m | 24 % |
+| Standing still (the first frame's body, held) | 22.6 cm | 5.4 cm | 22.9 cm | 20.2 cm | 0 | 0 % |
+| UniEgoMotion, released model (1,000 steps) | 33.9 cm | 8.1 cm | 33.1 cm | 31.2 cm | 0.59 m | 19 % |
+| Our chain, 4 steps, noise 0.5 and 0.3 (our usual setting) | 25.4 cm | 7.0 cm | 23.6 cm | 23.1 cm | 0.22 m | 4 % |
+| Our chain, 4 steps, noise 1 and 0.3 | 26.8 cm | 7.1 cm | 25.2 cm | 24.4 cm | 0.40 m | 9 % |
+| Our chain, 20 steps, noise 1 and 1 (a full sample) | 32.3 cm | 8.2 cm | 30.6 cm | 29.3 cm | 0.72 m | 22 % |
+| Our body along the recorded head path (usual setting) | 8.7 cm | 5.9 cm | 4.3 cm | 6.9 cm | | |
+| Recorded body through our encoder and decoder | 2.9 cm | 2.6 cm | 3.9 cm | 1.8 cm | | |
+
+- Distance to the recorded joints does not measure quality in this task: standing still beats
+  every model. It rewards caution.
+- With our usual low-noise sampling the chain hardly moves here (0.22 m against 0.76 m recorded):
+  without text, the most likely head path is to stay, and reduced noise pulls every draw to the
+  most likely path. Its lower error than UniEgoMotion's is that effect and nothing else.
+- Sampled in full (20 steps, noise 1), the chain travels as people do (0.72 m, 22 % of clips
+  1 m or more; toes slide 22.5 cm/s against 21.0 recorded) and is then level with UniEgoMotion
+  or slightly ahead: joints 32.3 against 33.9 cm, pose after alignment 8.2 against 8.1 cm.
+  UniEgoMotion travels a little less than people (0.59 m).
+- So on UniEgoMotion's own data and task, our two-stage chain is about as good as its single
+  model, with 20 sampling steps against 1,000. One run, one seed; the difference of 5 % in joint
+  distance is not established.
+- The body model is not the limit: along the recorded head path it is within 8.7 cm.
+- Differences that remain: our model is given the camera's height and tilt in the first frame,
+  UniEgoMotion masks its head trajectory entirely; our skeleton has average proportions (costs
+  2.9 cm); 727 clips are missing on our side.
+- Consequence for all generation comparisons, EgoPriMo included: report how the bodies move
+  (travel, share that goes, sliding) next to any distance, with a standing-still row; and choose
+  the sampling per use: low noise for a planner that should be safe, a full sample when the
+  spread of what people do is what is judged.

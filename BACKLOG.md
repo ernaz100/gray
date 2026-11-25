@@ -47,7 +47,10 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
   - [x] its released model and its evaluation on its validation set, on the workstation: generation from the first image
         MPJPE 0.415 m over 8 s (0.249 m in the first 2 s), forecasting 0.271 m, reconstruction 0.109 m. To do: check against
         the paper's table; its semantic measures need a model we do not have.
-  - [ ] score our chain and UniEgoMotion on its validation clips, generation from the first frame, first 5 s, on the same joints
+  - [x] our chain against UniEgoMotion on its validation clips (`gray/versus_uem.py`, Viper): level with it or slightly ahead when
+        sampled in full (joints 32.3 against 33.9 cm, travel 0.72 against 0.59 m; recorded 0.76 m). Standing still beats both
+        on joint distance, so that measure alone is not used any more.
+  - [ ] measures that do not reward caution (how the bodies move, as distributions over clips); several seeds
   - note: its repository has a two-stage configuration (a trajectory model, then motion), the same order as our chain
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
       and whether the feet are on the floor.
