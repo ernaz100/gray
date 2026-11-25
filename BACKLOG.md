@@ -43,7 +43,9 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
       to the workstation (`gray/local/uniegomotion`, `gray/local/data/ee4d`). Clips are 8 s at 10 frames per second;
       there are no captions, so this comparison is without text. Steps:
   - [ ] read its data format; bring it into our form (body in our encoding at 15 per second, camera path, its image features)
-  - [ ] run its released model and its evaluation on its validation set (needs its environment and the SMPL-X model)
+  - [x] its released model and its evaluation on its validation set, on the workstation: generation from the first image
+        MPJPE 0.415 m over 8 s (0.249 m in the first 2 s), forecasting 0.271 m, reconstruction 0.109 m. To do: check against
+        the paper's table; its semantic measures need a model we do not have.
   - [ ] train our chain on its training set; score both on the first 5 s with its measures and ours
   - note: its repository has a two-stage configuration (a trajectory model, then motion), the same order as our chain
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
@@ -58,7 +60,7 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 
 ## Running
 
-- UniEgoMotion's own evaluation with the released weights, on the workstation (about 1.5 h per task).
+Nothing.
 
 ## Parked
 

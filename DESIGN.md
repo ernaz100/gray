@@ -1449,3 +1449,23 @@ On 755 held-out moments, along the recorded head path, 4 steps and noise 0.3:
   stays 13 cm from the planned camera, no drift.
 - Not shown by these numbers: how the motion looks. Pictures of the same moments from the three
   models are the next check, before concluding that HumanML3D does not help.
+
+### UniEgoMotion as released, on its own validation set (25 Nov, on the workstation)
+
+Its code, released weights (`uem_v4b_dinov2`), processed data (EE4D-Motion, 36 GB, with DINOv2
+features per frame) and the SMPL-X model were copied from the MPI cluster to
+`gray/local/uniegomotion` and `gray/local/data/ee4d`. Its environment was built with Python 3.10
+(without `blendify`, which is only for rendering). Its metric scripts pointed at the authors' disk
+and were pointed at the local data. Its evaluation ran on 4,405 validation clips of 8 s at 10
+frames per second, about 1.5 h of sampling per task (1,000 diffusion steps) on the RTX 3090.
+
+| Task | Given | MPJPE | after alignment | Head position | Sliding (recorded 4.36) |
+|---|---|---:|---:|---:|---:|
+| Reconstruction | images and head trajectory of the whole clip | 0.109 m | 0.073 m | 0.058 m | 3.58 |
+| Forecasting | the first 2 s | 0.271 m | 0.094 m | 0.228 m | 2.61 |
+| Generation | the first image | 0.415 m | 0.102 m | 0.382 m | 2.87 |
+
+By 2 s segments, generation: 0.249, 0.422, 0.518 and 0.560 m. Its measures also include
+penetration of the floor and time in the air. Its semantic measures need a text-motion model
+at a path on the authors' disk and were not run. These numbers have not been compared with the
+paper's table yet.
