@@ -20,6 +20,11 @@ Scored every 0.2 s over the first 5 s (and UniEgoMotion also over its 8 s, to ch
     aligned     the same after the best rigid fit per frame: the pose alone
     head, pelvis  distance of those joints
 
+``--tasks fore recon`` does the same for UniEgoMotion's other two tasks. Forecasting: it is shown the clip's first 2 s
+(camera path and images); ours is given the same 2 s (no body) and the 5 s after them are scored. Reconstruction: it is
+given the whole camera path and all images; the row to compare with is our body model along the recorded head path, which
+is given that path and the first frame's image only.
+
 Rows: UniEgoMotion as released; our chain; our body model along the recorded head path (what the body model alone
 does); and the recorded body put through our encoder and decoder (what our representation costs: its skeleton has
 average proportions, the recorded one the person's).
@@ -65,6 +70,7 @@ def main() -> None:
     parser.add_argument("--head-noise", type=float, default=0.5, help="starting noise of the head path (1: a full sample)")
     parser.add_argument("--body-noise", type=float, default=0.3, help="starting noise of the body")
     parser.add_argument("--clips", type=int, default=None)
+    parser.add_argument("--tasks", nargs="+", default=["gen"], choices=("gen", "fore", "recon"), help="UniEgoMotion's tasks: generation, forecasting, reconstruction")
     parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
@@ -77,8 +83,6 @@ def main() -> None:
     amp = device == "cuda"
     with open(args.uem / "ee_val_gt_for_evaluation.pkl", "rb") as handle:
         truth = pickle.load(handle)
-    with open(args.uem / "preds_ee4d_gen.pkl", "rb") as handle:
-        theirs = pickle.load(handle)
     layer = smplx.SMPLXLayer(str(args.uem / "smplx"), gender="NEUTRAL", use_pca=True, num_pca_comps=12).to(device)
 
     @torch.no_grad()
@@ -89,74 +93,80 @@ def main() -> None:
 
     data = EeMoments(args.ee4d, "val", jitter=False)
     index = {str(n): i for i, n in enumerate(data.names)}
-    keys, starts = [], []
-    for key in list(truth)[: args.clips]:
-        name, first = key.rsplit("_start_", 1)
-        if name in index and key in theirs and int(first) % 2 == 0:
-            i, s = index[name], int(first) * 3 // 2
-            if data.start[i] + s + 76 <= data.start[i + 1] and len(truth[key]["aria_traj_T"]) > 50:
-                keys.append(key)
-                starts.append((i, s))
-    clips = EeMoments(args.ee4d, "val", starts=starts)
-    print(f"{len(keys):,d} of {len(truth):,d} clips are in our copy of the validation data", flush=True)
-
     planner, head_mean, head_std, _config = head.load(args.head_run, device)
     model, stats, _config = motion.load(args.body_run, device)
     decoder = Decoder(device)
     generator = torch.Generator(device=device).manual_seed(args.seed)
-    ours_at = np.arange(3, 76, 3) - 1  # of our 75 generated frames (15 per second), those at 0.2, 0.4, ..., 5.0 s
-    their_at = np.arange(2, 51, 2)  # the same instants at 10 per second
-    rows = {name: [] for name in ("UniEgoMotion", "UniEgoMotion, 8 s", "our chain", "our body, recorded head path", "recorded body through our encoder",
-                                  "standing still (the first frame's body, held)")}
-    moved = {name: [] for name in ("recorded", "UniEgoMotion", "our chain")}  # how far the pelvis travels in the 5 s (m)
-    slides = {"recorded": [], "our chain": []}
-    for first in range(0, len(keys), args.batch):
-        batch = to_device(collate([clips[i] for i in range(first, min(first + args.batch, len(keys)))]), device)
-        past = head.anchored(batch)
-        path = head.sample(planner, batch, head_mean, head_std, args.steps, generator, amp, history=1, temperature=args.head_noise, poses=True)
-        chain = motion.sample(model, batch, stats, args.steps, generator, amp, False, args.body_noise, head=torch.cat([past[:, :HISTORY], path], dim=1), history=1)
-        along = motion.sample(model, batch, stats, args.steps, generator, amp, False, args.body_noise, history=1)
-        recorded = motion.body_anchored(batch)[:, HISTORY:]
-        made = {"our chain": decoder.joints(chain), "our body, recorded head path": decoder.joints(along), "recorded body through our encoder": decoder.joints(recorded)}
-        slides["our chain"].append(feet(made["our chain"])[0].cpu())
-        slides["recorded"].append(feet(made["recorded body through our encoder"])[0].cpu())
-        # our frame (y up, anchored at the camera at now) -> the clip's frame (z up, laid on its first camera pose), through that camera
-        here = frames.matrix(past[:, NOW, 3:].double())  # camera axes in our frame, as columns
-        for b in range(batch["pose"].shape[0]):
-            key = keys[first + b]
-            camera = truth[key]["aria_traj_T"].to(device).double()
-            turn = camera[0, :3, :3] @ OURS.to(device) @ here[b].T
-            shift = camera[0, :3, 3] - turn @ past[b, NOW, :3].double()
-            real = skeleton(truth[key]["smpl_params"]).double()
-            guess = skeleton(theirs[key]["smpl_params"]).double()
+    result = {}
+    for task in args.tasks:
+        # generation and reconstruction: now is the clip's first frame. Forecasting: UniEgoMotion is shown the clip's first 2 s
+        # (camera path and images), so now is the frame at 2 s and ours is given the same 2 s (no body); the 5 s after it are scored.
+        lead = 20 if task == "fore" else 0
+        with open(args.uem / f"preds_ee4d_{task}.pkl", "rb") as handle:
+            theirs = pickle.load(handle)
+        keys, starts = [], []
+        for key in list(truth)[: args.clips]:
+            name, first = key.rsplit("_start_", 1)
+            if name in index and key in theirs and int(first) % 2 == 0:
+                i, s = index[name], (int(first) + lead) * 3 // 2
+                if data.start[i] + s + 76 <= data.start[i + 1] and len(truth[key]["aria_traj_T"]) > lead + 50 and len(theirs[key]["smpl_params"]["transl"]) > lead + 50:
+                    keys.append(key)
+                    starts.append((i, s))
+        clips = EeMoments(args.ee4d, "val", starts=starts)
+        history = HISTORY if task == "fore" else 1
+        ours_at = np.arange(3, 76, 3) - 1  # of our 75 generated frames (15 per second), those 0.2, 0.4, ..., 5.0 s after now
+        their_at = lead + np.arange(2, 51, 2)  # the same instants at 10 per second
+        names = ["UniEgoMotion", "our chain", "our body, recorded head path", "recorded body through our encoder", "standing still (the body at now, held)"]
+        rows = {name: [] for name in names}
+        moved = {name: [] for name in ("recorded", "UniEgoMotion", "our chain")}
+        slides = {"recorded": [], "our chain": []}
+        for first in range(0, len(keys), args.batch):
+            batch = to_device(collate([clips[i] for i in range(first, min(first + args.batch, len(keys)))]), device)
+            past = head.anchored(batch)
+            path = head.sample(planner, batch, head_mean, head_std, args.steps, generator, amp, history=history, temperature=args.head_noise, poses=True)
+            chain = motion.sample(model, batch, stats, args.steps, generator, amp, False, args.body_noise, head=torch.cat([past[:, :HISTORY], path], dim=1), history=history)
+            along = motion.sample(model, batch, stats, args.steps, generator, amp, False, args.body_noise, history=history)
+            recorded = motion.body_anchored(batch)[:, HISTORY:]
+            made = {"our chain": decoder.joints(chain), "our body, recorded head path": decoder.joints(along), "recorded body through our encoder": decoder.joints(recorded)}
+            slides["our chain"].append(feet(made["our chain"])[0].cpu())
+            slides["recorded"].append(feet(made["recorded body through our encoder"])[0].cpu())
+            here = frames.matrix(past[:, NOW, 3:].double())  # camera axes in our frame, as columns
+            for b in range(batch["pose"].shape[0]):
+                key = keys[first + b]
+                camera = truth[key]["aria_traj_T"].to(device).double()
+                turn = camera[lead, :3, :3] @ OURS.to(device) @ here[b].T  # our frame -> the clip's frame, through the camera at now
+                shift = camera[lead, :3, 3] - turn @ past[b, NOW, :3].double()
+                real = skeleton(truth[key]["smpl_params"]).double()
+                guess = skeleton(theirs[key]["smpl_params"]).double()
 
-            def score(joints: torch.Tensor, against: torch.Tensor) -> list[float]:
-                gap = (joints - against).norm(dim=-1)
-                return [float(gap.mean()), float((rigid(joints, against) - against).norm(dim=-1).mean()), float(gap[:, 15].mean()), float(gap[:, 0].mean())]
+                def score(joints: torch.Tensor, against: torch.Tensor) -> list[float]:
+                    gap = (joints - against).norm(dim=-1)
+                    return [float(gap.mean()), float((rigid(joints, against) - against).norm(dim=-1).mean()), float(gap[:, 15].mean()), float(gap[:, 0].mean())]
 
-            both = min(len(real), len(guess))  # some clips at the end of a segment are shorter than 8 s
-            rows["UniEgoMotion"].append(score(guess[their_at], real[their_at]))
-            rows["UniEgoMotion, 8 s"].append(score(guess[:both], real[:both]))
-            rows["standing still (the first frame's body, held)"].append(score(real[:1].expand(len(their_at), -1, -1), real[their_at]))
-            travel = lambda joints: float((joints[1:, 0, :2] - joints[:-1, 0, :2]).norm(dim=-1).sum())  # noqa: E731  on the ground (z is up here)
-            moved["recorded"].append(travel(real[np.append(0, their_at)]))
-            moved["UniEgoMotion"].append(travel(guess[np.append(0, their_at)]))
-            for name, joints in made.items():
-                placed = joints[b, ours_at].double() @ turn.T + shift
-                rows[name].append(score(placed, real[their_at]))
-                if name == "our chain":
-                    moved[name].append(travel(placed))
-        print(f"  {min(first + args.batch, len(keys)):,d} clips", flush=True)
-
-    result = {name: dict(zip(("joints_m", "aligned_m", "head_m", "pelvis_m"), np.mean(values, axis=0).tolist())) for name, values in rows.items()}
-    print(f"\n{len(keys):,d} clips, the first 5 s, every 0.2 s, 22 body joints (m)\n  {'':46s} joints  aligned    head  pelvis")
-    for name, r in result.items():
-        print(f"  {name:46s} {r['joints_m']:6.3f} {r['aligned_m']:8.3f} {r['head_m']:7.3f} {r['pelvis_m']:7.3f}")
-    result["pelvis_travel_m"] = {name: {"mean": float(np.mean(values)), "median": float(np.median(values)), "over_1m": float(np.mean(np.array(values) >= 1.0))} for name, values in moved.items()}
-    print("\nhow far the pelvis travels in the 5 s: " + "; ".join(f"{name} {r['mean']:.2f} m on average, 1 m or more in {r['over_1m']:.0%}" for name, r in result["pelvis_travel_m"].items()))
-    result["foot_slide_cm_s"] = {name: float(torch.cat(values).mean()) for name, values in slides.items()}
-    print(f"\ntoes slide while down (gray/chain.py): our chain {result['foot_slide_cm_s']['our chain']:.1f} cm/s, the recorded body through our encoder {result['foot_slide_cm_s']['recorded']:.1f} cm/s")
-    target = args.body_run / f"versus_uem-steps-{args.steps}-noise-{args.head_noise:g}-{args.body_noise:g}.json"
+                travel = lambda joints: float((joints[1:, 0, :2] - joints[:-1, 0, :2]).norm(dim=-1).sum())  # noqa: E731  on the ground (z is up here)
+                stretch = np.append(lead, their_at)
+                rows["UniEgoMotion"].append(score(guess[their_at], real[their_at]))
+                rows["standing still (the body at now, held)"].append(score(real[lead : lead + 1].expand(len(their_at), -1, -1), real[their_at]))
+                moved["recorded"].append(travel(real[stretch]))
+                moved["UniEgoMotion"].append(travel(guess[stretch]))
+                for name, joints in made.items():
+                    placed = joints[b, ours_at].double() @ turn.T + shift
+                    rows[name].append(score(placed, real[their_at]))
+                    if name == "our chain":
+                        moved[name].append(travel(placed))
+            print(f"  {task}: {min(first + args.batch, len(keys)):,d} clips", flush=True)
+        given = {"gen": "from the first frame", "fore": "from the first 2 s (camera path and images); the 5 s after them", "recon": "UniEgoMotion is given the whole camera path and all images"}[task]
+        table = {name: dict(zip(("joints_m", "aligned_m", "head_m", "pelvis_m"), np.mean(values, axis=0).tolist())) for name, values in rows.items()}
+        print(f"\n{task}: {given}. {len(keys):,d} clips, 5 s, every 0.2 s, 22 body joints (m)\n  {'':46s} joints  aligned    head  pelvis")
+        for name, r in table.items():
+            print(f"  {name:46s} {r['joints_m']:6.3f} {r['aligned_m']:8.3f} {r['head_m']:7.3f} {r['pelvis_m']:7.3f}")
+        table["pelvis_travel_m"] = {name: {"mean": float(np.mean(values)), "over_1m": float(np.mean(np.array(values) >= 1.0))} for name, values in moved.items()}
+        print("  how far the pelvis travels in the 5 s: " + "; ".join(f"{name} {r['mean']:.2f} m, 1 m or more in {r['over_1m']:.0%}" for name, r in table["pelvis_travel_m"].items()))
+        table["foot_slide_cm_s"] = {name: float(torch.cat(values).mean()) for name, values in slides.items()}
+        print(f"  toes slide while down: our chain {table['foot_slide_cm_s']['our chain']:.1f} cm/s, recorded {table['foot_slide_cm_s']['recorded']:.1f} cm/s", flush=True)
+        table["clips"] = len(keys)
+        result[task] = table
+    target = args.body_run / f"versus_uem-{'-'.join(args.tasks)}-steps-{args.steps}-noise-{args.head_noise:g}-{args.body_noise:g}.json"
     target.write_text(json.dumps(result, indent=1))
     print(f"\nour sampling: {args.steps} steps, starting noise {args.head_noise:g} (head path) and {args.body_noise:g} (body)\nwrote {target}", flush=True)
 
