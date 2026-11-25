@@ -162,18 +162,99 @@ ul.tight li { margin: .25rem 0; }
 .ask .w { font-size: .88rem; color: var(--ink-2); margin: .2rem 0; }
 .ask .o { font-size: .88rem; }
 
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: .8rem; margin: .8rem 0 1.6rem; align-items: start; }
+.col { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .7rem .85rem .5rem; border-top: 3px solid var(--muted); }
+.col.run { border-top-color: var(--accent); } .col.you { border-top-color: #d98a1f; } .col.done { border-top-color: #2e9e56; }
+.col h4 { margin: 0 0 .45rem; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); }
+.col .it { padding: .45rem 0; border-top: 1px solid var(--hairline); font-size: .88rem; }
+.col .it b { display: block; }
+.col .it span { color: var(--ink-2); font-size: .82rem; }
+.state { display: inline-block; font-size: .72rem; font-weight: 600; padding: .08rem .45rem; border-radius: 99px; border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
+.state.ok { color: #2e9e56; border-color: #2e9e56; } .state.go { color: var(--accent); border-color: var(--accent); } .state.wait { color: #d98a1f; border-color: #d98a1f; }
+td.best { font-weight: 600; }
 .card.shot { max-width: 1500px; margin: .8rem 0 1.1rem; }
 .card.shot img { cursor: zoom-in; }
 </style></head>
 <body>
 
 <header>
-  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 23 November 2026.</div>
+  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 25 November 2026.</div>
   <nav id="tabs"></nav>
 </header>
 <main id="panels">
 
-<section data-tab="Summary" id="summary">
+<section data-tab="Status" id="status">
+  <p class="lead"><b>Where the project stands, 25 November 2026.</b> Focus set on 24 November: motion quality and the comparison with the two baselines come before the comparator.</p>
+
+  <h2>The parts</h2>
+  <table>
+    <tr><th>Part</th><th>State</th><th>Headline number</th><th>What is open</th></tr>
+    <tr><td><b>1 · Head path</b> (head-v5)</td><td><span class="state ok">works</span></td><td>17.5 % of 5 s paths go through something (recorded 7.3 %); goes when told 85.5 % (people 92.0 %)</td><td>Paths are a quarter shorter than recorded ones; stairs</td></tr>
+    <tr><td><b>3 · Body</b> (motion-v1)</td><td><span class="state ok">works along a given path</span></td><td>pelvis 4.7 cm from recorded; 8.7 cm joint distance along the true head path on UniEgoMotion's data</td><td>Feet slide a little more than recorded (30 against 26 cm/s)</td></tr>
+    <tr><td><b>The chain</b> (1 then 3)</td><td><span class="state ok">compared with both baselines</span></td><td>see the two tables below</td><td>Videos in scenes; measures that do not reward standing still</td></tr>
+    <tr><td><b>HumanML3D for motion quality</b></td><td><span class="state go">in progress</span></td><td>Mixing it in without images: no gain. Placing motions into real rooms: 1 draw in 13 fits (head and pelvis rule)</td><td>Whole-body rule running; then training on the pairs</td></tr>
+    <tr><td><b>2 · Comparator</b></td><td><span class="state">parked</span></td><td>compare-v3: 13 to 16 % false alarms on an unchanged place, 91 % alarms in a different scene</td><td>Resumes after the comparisons</td></tr>
+  </table>
+
+  <h2>Right now</h2>
+  <div class="board">
+    <div class="col run"><h4>Running</h4>
+      <div class="it"><b>Rejection sampling, whole body</b><span>Viper. HumanML3D motions placed at recorded frames; all joints and bones checked against walls and a 3D map of each home.</span></div>
+      <div class="it"><b>Scene videos, 8 samples in Loc_08</b><span>Workstation, Blender. Recorded, ours and EgoPriMo in the same room.</span></div>
+    </div>
+    <div class="col you"><h4>Waiting on a decision or access</h4>
+      <div class="it"><b>Ego-Exo4D access</b><span>Pending. Needed to show UniEgoMotion in the rooms it was trained on (video and point cloud per recording).</span></div>
+      <div class="it"><b>Retrain EgoPriMo on our samples?</b><span>Removes the caveat that it is used outside how it was trained. Suggested: only before a write-up.</span></div>
+      <div class="it"><b>HumanML3D videos</b><span>motion-v1 against motion-v3 side by side: not yet judged by eye.</span></div>
+    </div>
+    <div class="col"><h4>Next</h4>
+      <div class="it"><b>Train on the placed pairs</b><span>Head path and body, with real room images for HumanML3D motions; compare with head-v5 and motion-v1.</span></div>
+      <div class="it"><b>UniEgoMotion against ours as video</b><span>On its validation clips; plain floor until the rooms are available.</span></div>
+      <div class="it"><b>Raven in sync with Viper</b><span>When Raven is back up.</span></div>
+    </div>
+    <div class="col done"><h4>Done on 24 and 25 November</h4>
+      <div class="it"><b>Comparison with UniEgoMotion</b><span>Level, perhaps slightly ahead, on its own data.</span></div>
+      <div class="it"><b>Comparison with EgoPriMo</b><span>A third nearer to the recorded body, half the paths through something.</span></div>
+      <div class="it"><b>How far planned paths go</b><span>Less noise cuts detours more than distance.</span></div>
+      <div class="it"><b>HumanML3D mixed in without images</b><span>No gain (motion-v2, motion-v3).</span></div>
+    </div>
+  </div>
+
+  <h2>Against UniEgoMotion, on its data</h2>
+  <p>3,678 of its validation clips. Both models start from the first frame, with no text; the first 5 s are scored on the same 22 joints. Its released model against our chain trained on its training data.</p>
+  <table>
+    <tr><th></th><th>Joint distance</th><th>After aligning the pose</th><th>Pelvis travels</th><th>Travels 1 m or more</th></tr>
+    <tr><td>Recorded</td><td></td><td></td><td>0.76 m</td><td>24 %</td></tr>
+    <tr><td>Standing still</td><td>22.6 cm</td><td>5.4 cm</td><td>0</td><td>0 %</td></tr>
+    <tr><td>UniEgoMotion, released (1,000 sampling steps)</td><td>33.9 cm</td><td>8.1 cm</td><td>0.59 m</td><td>19 %</td></tr>
+    <tr><td><b>Ours, a full sample</b> (20 steps; three seeds)</td><td class="best">32.3 to 32.6 cm</td><td>8.2 cm</td><td class="best">0.72 m</td><td class="best">22 %</td></tr>
+    <tr><td>Ours, low-noise planner setting</td><td>25.4 cm</td><td>7.0 cm</td><td>0.22 m</td><td>4 %</td></tr>
+  </table>
+  <div class="callout"><div class="h">How to read it</div>
+    <p>Standing still has the lowest joint distance, so that number alone rewards not moving. Without text our low-noise setting hardly moves, and its 25.4 cm is that effect. Sampled in full, our chain moves as people do and is level with UniEgoMotion. Its sampling spread is unknown: one saved sample.</p></div>
+
+  <h2>Against EgoPriMo, on held-out Nymeria homes</h2>
+  <p>1,500 held-out samples. Both models are given the frame at now and one sentence; the first 5 s are scored. EgoPriMo is our reimplementation (no code or weights were released).</p>
+  <table>
+    <tr><th></th><th>Joint distance</th><th>After aligning the pose</th><th>Pelvis travels</th><th>Goes 1 m or more</th><th>Goes through something</th></tr>
+    <tr><td>Recorded</td><td></td><td></td><td>1.97 m</td><td>75 %</td><td>3.9 %</td></tr>
+    <tr><td>Standing still</td><td>83.9 cm</td><td>8.1 cm</td><td>0</td><td>0 %</td><td></td></tr>
+    <tr><td>EgoPriMo reimplementation</td><td>76.5 cm</td><td>10.2 cm</td><td>1.49 m</td><td>57 %</td><td>27.1 %</td></tr>
+    <tr><td><b>Ours, from one frame</b></td><td class="best">52.3 cm</td><td class="best">8.0 cm</td><td>1.50 m</td><td>63 %</td><td class="best">12.6 %</td></tr>
+    <tr><td>Ours, with its 2 s of history (as used)</td><td>46.4 cm</td><td>6.6 cm</td><td>1.53 m</td><td>64 %</td><td>12.5 %</td></tr>
+  </table>
+  <div class="callout"><div class="h">How to read it</div>
+    <p>Both travel the same distance (1.50 and 1.49 m), so the gap is not caution. Limits: it is a reimplementation, it was trained on 8 s windows with all overlapping sentences and is given one sentence here, and it sees the fisheye frame where ours sees the pinhole view.</p></div>
+
+  <h2>In a room</h2>
+  <div class="grid">
+    <div class="card"><video controls muted loop playsinline preload="metadata" src="media/scene-kitchen.mp4"></video>
+      <div class="cap"><div class="h">Same frame, same sentence: recorded (grey), ours (blue), EgoPriMo (orange)</div>
+      <div class="p">Loc_08, the one home with a mesh scene. It is a training home of both models: this shows how the motions look in a room; the test is the table above. A first render; seven more are being made.</div></div></div>
+  </div>
+</section>
+
+<section data-tab="Summary" id="summary" hidden>
   <h2>The idea</h2>
   <p class="lead"><b>Camera image and a sentence in, motion out</b>, with a check that notices when the world is not as expected and triggers a new plan. This page is about the first stage, the head path.</p>
   <div class="pipe">
@@ -635,12 +716,14 @@ ul.tight li { margin: .25rem 0; }
   <h2>In flight</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
-    <tr><td><b>compare-v4</b>: comparator trained with revisits as targets</td><td>Do the false alarms on an unchanged place come down?</td></tr>
+    <tr><td><b>Rejection sampling</b>: HumanML3D motions placed into recorded frames of real homes</td><td>Does HumanML3D help once its motions come with a real room image?</td></tr>
+    <tr><td><b>Scene videos</b> of ours against the baselines</td><td>How the motions compare by eye</td></tr>
   </table>
 
   <h2>Build queue</h2>
   <table>
     <tr><th>What</th><th>What it answers</th></tr>
+    <tr><td><b>compare-v4</b>: comparator trained with revisits as targets (parked at 2,500 of 20,000 steps)</td><td>Do the false alarms on an unchanged place come down?</td></tr>
     <tr><td><b>Moved-furniture test</b> in Loc_08</td><td>Whether the comparator notices a relevant change</td></tr>
     <tr><td><b>The loop on recordings</b>: plan, step, compare, replan</td><td>How often the system would stop, and how plans evolve</td></tr>
     <tr><td><b>A figure to look at</b>: the generated body as a moving skeleton</td><td>Whether the motion looks right, which numbers do not show</td></tr>
