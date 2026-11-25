@@ -28,9 +28,11 @@ and (2) a comparison with EgoPriMo and UniEgoMotion trained on the same data.
 - [ ] **Look at the motion** of `motion-v1` and `motion-v3` on the same moments (videos), since the numbers may not show
       quality; and tighten the foot-slide measure, which counts a toe pushing off as down.
 - [ ] If HumanML3D is to be pursued: a larger share, the head path roughened, or pretraining on it and then Nymeria.
-- [ ] **Rejection sampling into real scenes.** Place a HumanML3D motion at a recorded starting frame
-      in a Nymeria home; keep it if its path goes through nothing on that home's map. Train with
-      these as extra samples that have a real image.
+- [x] **Rejection sampling into real scenes** (`gray/place.py`, 25 Nov): 6.6 % of draws fit (path on walked floor, whole
+      body clear of walls and of what stands there, camera height within 10 cm); 36,766 pairs.
+- [ ] **Training on the pairs**: `head-v6` and `motion-v4` (Viper, running). Then the tables of head-v5 and motion-v1.
+- [ ] Sample EgoPriMo with few steps and reduced noise, so that sampling is the same on both sides.
+- [ ] UniEgoMotion against ours as video: on a plain floor now; in its rooms when Ego-Exo4D access is there (pending).
 - [x] **EgoPriMo as a baseline** (`gray/versus_egoprimo.py`, 25 Nov): on 1,500 held-out moments, at the same amount of
       movement, our chain is a third nearer to the recorded body (52.3 against 76.5 cm) and goes through something half as
       often (12.6 against 27.1 %). It is our reimplementation, used outside how it was trained.

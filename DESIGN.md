@@ -1602,3 +1602,50 @@ Our chain as a full sample: joints 32.3, 32.6 and 32.6 cm, travel 0.72, 0.72 and
 UniEgoMotion's 33.9 cm (one saved sample of its own). Our spread over seeds is 0.3 cm, so the
 1.3 to 1.6 cm in our favour is not an accident of our sampling; whether it exceeds the spread of
 UniEgoMotion's sampling is not known, since its predictions take 1.5 h per run to make.
+
+### HumanML3D motions placed into recorded frames (25 Nov, `gray/place.py`, job 13684566)
+
+Idea (user, 24 Nov): a HumanML3D motion gets a real image by putting its camera at now onto the
+recorded camera of a training moment and keeping the pair if the motion fits the home. Checked
+over the 5 s after now, every 0.2 s; 38,276 training moments with a map, 16 draws each.
+
+| The motion goes | Draws | Not blocked | And on walked floor | And the body is clear | Height within 10 cm | All |
+|---|---:|---:|---:|---:|---:|---:|
+| Any distance | 612,416 | 25.2 % | 21.8 % | 18.2 % | 35.5 % | 6.6 % |
+| 0 to 1 m | 19,983 | 69.2 % | 65.5 % | 58.2 % | 35.9 % | 22.2 % |
+| 1 to 2 m | 118,903 | 41.8 % | 37.4 % | 32.3 % | 34.7 % | 11.7 % |
+| 2 to 3 m | 220,276 | 25.7 % | 22.2 % | 18.3 % | 35.7 % | 6.7 % |
+| 3 to 5 m | 218,270 | 14.5 % | 11.8 % | 9.1 % | 36.0 % | 3.2 % |
+| 5 m or more | 34,984 | 6.7 % | 4.6 % | 3.1 % | 34.5 % | 1.1 % |
+
+36,766 pairs kept (at most 4 per moment): 17,408 moments have one, 15,314 of the 27,192
+HumanML3D samples are used. Kept motions go 2.15 m on average, all draws 2.90 m.
+
+- The body rule (user, 25 Nov: every body part, not only head and pelvis): 22 joints and the 21
+  bone middles against the walls of the camera's storey, and against a 3D map of what stands in
+  the home (`ground/solid/`: 10 cm cubes with measured points in 30 % of the home's recordings).
+- The recorded bodies of 3,036 of the frames under the same rule, as its error. First version
+  (every part against the cubes, walls of any storey): 46 % passed. Of the failures, 39 % of
+  bodies had a forearm or hand in a solid cube within 5 s (hands rest on things), 3 to 5 % a
+  leg or the trunk; 20 % were in a wall, most of that walls of another storey. Final rule: walls
+  of the camera's storey for every part (3.5 % of recorded bodies fail), cubes for all parts but
+  the arms. 87.8 % of recorded bodies pass.
+- The rules on the path are stricter than reality too: the recorded 5 s pass "not blocked" in
+  80 % and "walked" in 76 %.
+- Body points have no thickness.
+- Trainings with the pairs for 30 % of the samples, otherwise as their predecessors:
+  `head-v6` (as head-v5) and `motion-v4` (as motion-v1), Viper, 1-hour jobs from 13684899 and
+  13684906. A pair is shown as a start from a single frame.
+
+### Scene videos against the EgoPriMo reimplementation (25 Nov, `gray/versus_scene.py`)
+
+Eight moments drawn at random in Loc_08 (a training home of both models; the only home with a
+mesh scene): recorded, ours (only the frame at now, usual sampling) and EgoPriMo in the same room,
+`gray/motion/scene/` on the workstation, two of them in `docs/media/`. Joint distance to the
+recorded body in the eight: ours 29 to 110 cm, EgoPriMo 58 to 209 cm, ours nearer in seven;
+EgoPriMo goes through something in three, ours in none.
+
+Note on the comparison of 25 Nov: at full noise our chain goes through something as often as
+EgoPriMo (26.1 against 27.1 %) and is 61.9 against 76.5 cm from the recorded body. So most of the
+difference in collisions and 10 of the 24 cm are the sampling setting, which EgoPriMo was not
+given. To do: sample EgoPriMo with few steps and reduced noise too.
