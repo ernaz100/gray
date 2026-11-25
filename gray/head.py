@@ -152,7 +152,9 @@ def flow_loss(model: HeadPath, batch: dict, mean: torch.Tensor, std: torch.Tenso
     """The loss of the path; with ``free_weight`` above 0 a pair: the total loss, and the error of the free distances in metres (nan if none are known)."""
     size, device = batch["pose"].shape[0], batch["pose"].device
     draw = lambda *shape: torch.rand(*shape, generator=generator, device=device)  # noqa: E731
-    history = (draw(size) * HISTORY).long() + 1 if random_history else HISTORY
+    history = (draw(size) * HISTORY).long() + 1 if random_history else torch.full((size,), HISTORY, device=device)
+    if "history_max" in batch:  # samples that begin less than 2 s into what is known of them (gray/ee4d.py)
+        history = torch.minimum(history, batch["history_max"])
     past, image, seen, text, text_valid, patches, future = inputs(batch, mean, std, history)
     text_valid = text_valid & (draw(size) >= text_drop)[:, None]
     level = torch.zeros(size, device=device) if one_step else draw(size)
@@ -273,7 +275,7 @@ def load(folder: Path, device: str) -> tuple[HeadPath, torch.Tensor, torch.Tenso
     saved = torch.load(folder / "last.pt", map_location=device)
     config = saved["config"]
     model = HeadPath(config["width"], config["layers"], config["heads"], patches=bool(config.get("patches")), free=bool(config.get("ground")),
-                     depth=bool(config.get("depth"))).to(device)
+                     depth=bool(config.get("depth")), image_dim=int(config.get("image_dim", 384))).to(device)
     model.load_state_dict(saved["model"])
     return model.eval(), saved["mean"].to(device), saved["std"].to(device), config
 
@@ -285,6 +287,8 @@ def main() -> None:
     parser.add_argument("--images", type=Path, default=Path("/ptmp/enazaren/gray/pinhole"))
     parser.add_argument("--patches", type=Path, default=None, help="folder of gray/patches.py: the model also sees the image grid of the frame at now")
     parser.add_argument("--depth", type=Path, default=None, help="folder of gray/depth.py: the model also gets the estimated depth of the frame at now (needs --patches)")
+    parser.add_argument("--ee4d", type=Path, default=None, help="folder of gray/ee4d.py: train and score on UniEgoMotion's data in place of Nymeria (no text, no image grid, no maps)")
+    parser.add_argument("--image-dim", type=int, default=384, help="numbers per image feature (1024 for --ee4d)")
     parser.add_argument("--explore", type=int, default=1, help="train on the best of this many noises per sample (explorative training); 1 is ordinary training")
     parser.add_argument("--one-step", action="store_true", help="always start from pure noise: the model generates a path in one pass")
     parser.add_argument("--ground", type=Path, default=None, help="folder of gray/ground.py: the model also learns to say how far the way is free (training signal only)")
@@ -316,8 +320,14 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = args.amp and device == "cuda"
 
-    data = dict(listing=args.moments, tracks=args.tracks, images=args.images, cache=args.cache, patches=args.patches, ground=args.ground, depth=args.depth)
-    training, held = Moments(**data, held=False, jitter=True), Moments(**data, held=True)
+    if args.ee4d is not None:
+        from gray.ee4d import EeMoments
+
+        args.image_dim, args.patches, args.ground, args.depth = 1024, None, None, None
+        training, held = EeMoments(args.ee4d, "train"), EeMoments(args.ee4d, "val", jitter=False)
+    else:
+        data = dict(listing=args.moments, tracks=args.tracks, images=args.images, cache=args.cache, patches=args.patches, ground=args.ground, depth=args.depth)
+        training, held = Moments(**data, held=False, jitter=True), Moments(**data, held=True)
     print(f"{len(training):,d} training moments, {len(held):,d} held-out moments, device {device}", flush=True)
     options = dict(batch_size=args.batch_size, num_workers=args.workers, persistent_workers=args.workers > 0, collate_fn=collate)
     picked = np.random.default_rng(args.seed).permutation(len(held))[: args.val_moments]
@@ -333,7 +343,8 @@ def main() -> None:
         poses = torch.cat([anchored(batch) for batch in DataLoader(some, batch_size=256, collate_fn=collate, num_workers=args.workers)])
         mean, std = poses.mean((0, 1)).to(device), poses.std((0, 1)).clamp_min(1e-2).to(device)
 
-    model = HeadPath(args.width, args.layers, args.heads, patches=args.patches is not None, free=args.ground is not None, depth=args.depth is not None).to(device)
+    model = HeadPath(args.width, args.layers, args.heads, patches=args.patches is not None, free=args.ground is not None, depth=args.depth is not None,
+                     image_dim=args.image_dim).to(device)
     free_weight = args.free_weight if args.ground is not None else 0.0
     print(f"{sum(p.numel() for p in model.parameters()) / 1e6:.1f} M parameters", flush=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)

@@ -206,7 +206,7 @@ def load(folder: Path, device: str, best: bool = True) -> tuple[Body, dict, dict
     path = folder / "best.pt" if best and (folder / "best.pt").is_file() else folder / "last.pt"
     saved = torch.load(path, map_location=device)
     config = saved["config"]
-    model = Body(config["width"], config["layers"], config["heads"], patches=config.get("patches") not in (None, "None")).to(device)
+    model = Body(config["width"], config["layers"], config["heads"], patches=config.get("patches") not in (None, "None"), image_dim=int(config.get("image_dim", 384))).to(device)
     model.load_state_dict(saved["model"], strict=False)  # runs from before the tokens for missing images and paths lack them
     return model.eval(), {key: value.to(device) for key, value in saved["stats"].items()}, config
 
@@ -221,6 +221,8 @@ def main() -> None:
     parser.add_argument("--everything", action="store_true", help="train on all moments, not only the navigation subset")
     parser.add_argument("--wide", type=int, default=None, help="with --everything: move now by up to this many frames either way")
     parser.add_argument("--cold", type=float, default=0.3, help="share of training samples without the past body")
+    parser.add_argument("--ee4d", type=Path, default=None, help="folder of gray/ee4d.py: train and score on UniEgoMotion's data in place of Nymeria (no text, no image grid)")
+    parser.add_argument("--image-dim", type=int, default=384, help="numbers per image feature (1024 for --ee4d)")
     parser.add_argument("--hml", type=Path, default=None, help="folder of gray/hml.py: also train on HumanML3D motions (no images; text and body)")
     parser.add_argument("--hml-share", type=float, default=0.3, help="share of the training samples drawn from HumanML3D")
     parser.add_argument("--hml-path", choices=("masked", "given"), default="masked",
@@ -252,8 +254,14 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = args.amp and device == "cuda"
 
-    data = dict(listing=args.moments, tracks=args.tracks, images=args.images, cache=args.cache, patches=args.patches, body=args.body)
-    training, held = Moments(**data, held=False, jitter=True, everything=args.everything, wide=args.wide), Moments(**data, held=True)
+    if args.ee4d is not None:
+        from gray.ee4d import EeMoments
+
+        args.image_dim, args.patches = 1024, None
+        training, held = EeMoments(args.ee4d, "train"), EeMoments(args.ee4d, "val", jitter=False)
+    else:
+        data = dict(listing=args.moments, tracks=args.tracks, images=args.images, cache=args.cache, patches=args.patches, body=args.body)
+        training, held = Moments(**data, held=False, jitter=True, everything=args.everything, wide=args.wide), Moments(**data, held=True)
     print(f"{len(training):,d} training moments, {len(held):,d} held-out moments, device {device}", flush=True)
     options = dict(batch_size=args.batch_size, num_workers=args.workers, persistent_workers=args.workers > 0, collate_fn=collate)
     picked = np.random.default_rng(args.seed).permutation(len(held))[: args.val_moments]
@@ -274,7 +282,7 @@ def main() -> None:
         stats = {key: value.to(device) for key, value in stats.items()}
         print(f"the body is known in {len(bodies) / len(heads):.0%} of the training moments", flush=True)
 
-    model = Body(args.width, args.layers, args.heads, patches=args.patches is not None).to(device)
+    model = Body(args.width, args.layers, args.heads, patches=args.patches is not None, image_dim=args.image_dim).to(device)
     print(f"{sum(p.numel() for p in model.parameters()) / 1e6:.1f} M parameters", flush=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     schedule = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda s: min(1.0, (s + 1) / args.warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / args.steps))))
