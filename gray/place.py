@@ -308,7 +308,7 @@ def pairs(args: argparse.Namespace) -> None:
     report = {}
     for lo, hi in [(0, 99)] + list(zip(edges[:-1], edges[1:])):
         m, r = (tally["travel"] >= lo) & (tally["travel"] < hi), (recorded["travel"] >= lo) & (recorded["travel"] < hi)
-        name = "any distance" if hi - lo > 50 else (f"{lo} to {hi} m" if hi < 99 else f"{lo} m or more")
+        name = "any distance" if lo == 0 and hi == 99 else (f"{lo} to {hi} m" if hi < 99 else f"{lo} m or more")
         row = {"draws": int(m.sum()), **{k: float(tally[k][m].mean()) for k in ("not_blocked", "walked", "body", "height", "all")},
                "recorded": int(r.sum()), "recorded_not_blocked": float(recorded["not_blocked"][r].mean()) if r.any() else None, "recorded_walked": float(recorded["walked"][r].mean()) if r.any() else None}
         report[name] = row

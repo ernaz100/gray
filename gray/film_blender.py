@@ -140,7 +140,7 @@ if "path" in spec:
 if "bodies" in spec:
     for number, (one, own) in enumerate(zip(shown, all_verts)):
         middle = own.mean(1)[::3]
-        drawn.append(tube(f"trace {number}", [(x, y, spec["floor"] + 0.02 + 0.004 * number) for x, y, _z in middle], srgb(*one["colour"]), 0.018, emission=0.8))
+        drawn.append(tube(f"trace {number}", [(x, y, spec["floor"] + 0.06 + 0.01 * number) for x, y, _z in middle], srgb(*one["colour"]), 0.03, emission=1.5))
 
 camera_data = bpy.data.cameras.new("camera")
 camera = bpy.data.objects.new("camera", camera_data)
