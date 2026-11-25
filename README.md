@@ -1,21 +1,22 @@
 # gray
 
-**Overview with pictures:** open [`docs/index.html`](docs/index.html) in a browser after cloning. It summarises the state of the research, with figures and the main numbers.
-
-**What is open:** [`BACKLOG.md`](BACKLOG.md).
-
-
 Egocentric image and text in, body motion out, with a comparator that notices when the world
-differs from what was predicted. `DESIGN.md` has the reasoning, every experiment and its numbers
-in the order they happened. This file only says where things are. `STATUS.md` is the short summary of where the project stands.
+differs from what was predicted.
 
-Everything runs on Viper: Python `/u/enazaren/envs/torch/bin/python`, jobs in `jobs/` (each
-names its log and output at the top), outputs under `/ptmp/enazaren/gray`.
+**Taking over the project:** start with [`HANDOFF.md`](HANDOFF.md).
+**Overview with pictures:** open [`docs/index.html`](docs/index.html) in a browser after cloning (the Status tab first).
+**Results, short:** [`STATUS.md`](STATUS.md). **What is open:** [`BACKLOG.md`](BACKLOG.md).
+**Every experiment, in order:** [`DESIGN.md`](DESIGN.md).
 
-## Current work: the head path on moments
+This file only says which script does what. Computation runs on Viper: Python
+`/u/enazaren/envs/torch/bin/python`, outputs under `/ptmp/enazaren/gray`. Trainings are submitted
+with `jobs/submit.sh`, one-off scripts with `jobs/once.sbatch` (see `HANDOFF.md`, section 4, and
+`jobs/clusters/README.md`); the older per-script job files in `jobs/` name their log and output at the top.
 
-The model that predicts where the head goes, from text and what the camera saw. A sample starts
-where a narration sentence starts.
+## The chain on moments
+
+The head-path model predicts where the head goes from text and what the camera saw; the body
+model generates the body along it. A sample ("moment") starts where a narration sentence starts.
 
 | Step | Code | Job | Output in `/ptmp/enazaren/gray` |
 |---|---|---|---|
@@ -39,6 +40,24 @@ where a narration sentence starts.
 | Workstation: a video with the views the models were given, the body as a mesh in the home's scene, and the planned camera's view (Blender) | `gray/film.py`, `gray/film_blender.py`, `gray/seen.py` | | |
 | For every frame a later frame from nearly the same pose (targets for the comparator) | `gray/revisits.py` | `revisits.sbatch` | `revisits/<id>.npy` |
 | Does the comparator notice another frame than the true one? | `gray/alarm.py` | `alarm.sbatch` | `runs/<name>/alarm*.json` |
+| How far generated head paths go at each sampling setting | `gray/travel.py` | `once.sbatch` | `runs/<name>/travel.json` |
+
+## HumanML3D
+
+| Step | Code | Job | Output in `/ptmp/enazaren/gray` |
+|---|---|---|---|
+| HumanML3D in the form of our samples; text features of its captions; the loader (`HmlMoments`) | `gray/hml.py` | | `hml3d/hml.npz`, `hml3d/text_tokens.npy` |
+| Its motions placed into recorded frames, kept when they fit the home (`pairs`); the 3D map per home (`solid`); its joints (`joints`); some kept pairs as bodies for videos (`show`); the loader (`Placed`, `--placed` in head.py and motion.py) | `gray/place.py` | `once.sbatch` | `hml3d/placed.npz`, `ground/solid/`, `hml3d/joints.npy` |
+
+## Comparisons with published models
+
+| Step | Code | Job | Output |
+|---|---|---|---|
+| UniEgoMotion's data (Ego-Exo4D) in our form; `--ee4d` in head.py and motion.py trains on it | `gray/ee4d.py` | | `ee4d/` |
+| Our chain against UniEgoMotion's saved predictions, its three tasks (`--tasks gen fore recon`); `--videos` writes bodies for videos | `gray/versus_uem.py` | `once.sbatch` | `runs/ee-motion-v1/versus_uem*.json` |
+| Our chain against the EgoPriMo reimplementation (STEER) on held-out moments | `gray/versus_egoprimo.py` | `once.sbatch` | `runs/<body run>/versus_egoprimo.json` |
+| Videos: ours, EgoPriMo and recorded in the Loc_08 scene (`export` on the cluster, `render` on the workstation); placed HumanML3D motions (`render --captions`); ours against UniEgoMotion on a plain floor (`floor`) | `gray/versus_scene.py`, `gray/film_blender.py`, `gray/versus_blender.py` | | workstation `gray/motion/` |
+| Side-by-side bodies of several body runs on a checkered floor | `gray/versus.py` | | workstation |
 
 Shared helpers: `gray/frames.py` (the frame anchored at "now"), `gray/census.py` (which
 sentences mention walking or name a destination).
@@ -93,6 +112,9 @@ Run on a workstation without the data; each makes up a tiny world in which the r
 
 ## Runs
 
+All in `/ptmp/enazaren/gray/runs/` on Viper. A training resumes from `runs/<name>/last.pt`, so a
+new training needs a name that is not taken.
+
 | Run | Setup | Trained on | Note |
 |---|---|---|---|
 | `features-v1` | windows | all windows, fisheye features | Experiment 1 |
@@ -100,6 +122,15 @@ Run on a workstation without the data; each makes up a tiny world in which the r
 | `head-v1` | windows | navigation subset, pinhole features | head path only |
 | `head-v2` | windows | as head-v1, plus the image grid | |
 | `head-v3` | moments | navigation subset of moments, pinhole features | |
+| `head-v4` | moments | plus the image grid of the current frame | |
+| `head-v5` | moments | plus free space as a training target | **the planner** (4 steps, half the noise) |
+| `head-v6` | moments | plus estimated depth as input | did not help |
+| `head-v7` | moments | as head-v5, plus 30 % placed HumanML3D motions | 25 Nov |
+| `motion-v1` | moments | body along the head path | **the body model** (4 steps, noise 0.3) |
+| `motion-v2`, `motion-v3` | moments | plus HumanML3D without images (head path masked, given) | no gain |
+| `motion-v4` | moments | as motion-v1, plus 30 % placed HumanML3D motions | 25 Nov |
+| `ee-head-v1`, `ee-motion-v1` | UniEgoMotion's clips | its training data, no text | for the UniEgoMotion comparison |
+| `compare-v1` to `compare-v4` | moments | the comparator | parked; v4 stopped at 2,500 steps |
 
 The image grids exist twice: `patches/` holds them for the "now" frames of the window subset
 (what head-v2 was trained on), `grids/` for every frame of every recording (`patches.py --all`).

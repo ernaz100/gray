@@ -1684,3 +1684,34 @@ camera path and the image of the first frame. The first 5 s, 3,678 clips.
   fixes how far the body goes, so low noise is no shortcut, only a better guess of the pose.
 - Over the three tasks: generation 32.3 against 33.9 cm, forecasting 28.4 against 30.7 cm,
   reconstruction 8.7 against 9.6 cm. One saved sample of UniEgoMotion per task.
+
+### head-v7 and motion-v4: trained with the placed HumanML3D motions (25 Nov, jobs 13684906 to 13685621; scored by 13693983 to 13693986)
+
+As head-v5 and motion-v1, with 30 % of the training samples drawn from the 36,766 placed pairs
+(`--placed`); 40,000 steps each. (The head-path run was first submitted as `head-v6`, a name
+already taken by the depth run of 22 Nov; those jobs stopped at once and changed nothing in it.
+One evaluation job wrote `head-v6/score-guidance-1-steps-4-temperature-0.5.json`, a valid score of
+that old run.) Everything on held-out homes, planner setting (4 steps, half the noise) for the head
+path, 4 steps and noise 0.3 for the body.
+
+| | head-v5 / motion-v1 | head-v7 / motion-v4 |
+|---|---:|---:|
+| Head path goes through something, all 3,000 moments | 12.9 % | 13.2 % |
+| ... moments that go 1 m or further | 17.5 % | 17.8 % |
+| Goes when the sentence mentions walking (people 92.0 %) | 82.0 % | 80.0 % |
+| Ends within 1 m of the named object (58 moments) | 61.0 % | 54.1 % |
+| One draw from the recorded path | 47.4 cm | 49.2 cm |
+| Path length against recorded, moments that go | 74 % | 72 % |
+| Body pelvis along the recorded path, warm / cold | 4.7 / 6.0 cm | 4.7 / 6.1 cm |
+| Toes slide while down (recorded 25.5 cm/s) | 30.2 cm/s | 30.5 cm/s |
+| Chain from one frame against the recorded body (EgoPriMo table) | 52.3 cm | 54.1 cm |
+| ... goes through something there | 12.6 % | 13.9 % |
+
+- No gain anywhere; the head path is slightly worse at going when told and at reaching the named
+  object (the latter on 58 moments only). The body model is unchanged.
+- HumanML3D has now been tried three ways (mixed in with the head path masked, given, and placed
+  into real frames) without a gain on our measures. head-v5 and motion-v1 stay the models.
+- Likely reasons, not tested: the placed motions are shown as starts from a single frame and
+  their sentences describe the body, not the room ("a person walks forward slowly"), so they
+  teach the head-path model little about where to go in a room; and our measures may not capture
+  what HumanML3D adds (variety of motion), which no measure here looks at.

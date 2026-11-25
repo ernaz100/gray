@@ -1,190 +1,114 @@
 # Gray: where the project stands
 
-As of 23 November 2026. This file is the short version. `DESIGN.md` has every experiment with
-its reasoning and numbers in the order they happened; `README.md` says where code and data are.
+As of 25 November 2026, evening. The short version of the results. `HANDOFF.md` says how to work
+on the project; `DESIGN.md` has every experiment with its reasoning, in order; `BACKLOG.md` what
+is open.
 
 ## 1. Goal
 
-A system that takes what a head camera sees and a text prompt, generates motion that works in
-the scene, and notices when the world differs from what it expected (after Jeffrey Gray's
-comparator): predict what the camera will show, compare with what it shows, stop and replan on
-a mismatch. The aim is a closed loop that can be put into a scene and prompted around.
+A system that takes what a head camera sees and a sentence, generates motion that works in the
+scene, and notices when the world differs from what it expected (after Jeffrey Gray's
+comparator): predict what the camera will show, compare, stop and replan on a mismatch. The aim
+is a closed loop that can be put into a scene and prompted around.
 
-Order of the parts: text and image give the head path; the head path gives what the camera
-should show along it (the comparator); both give the body motion.
+The chain: image and text give the **head path**; the head path gives the **body**. The
+**comparator** checks the head path against what the camera sees. Order of work since 24 Nov:
+motion quality and comparisons with published models first, the comparator after.
 
-## 2. Rules set by the user
+## 2. Rules set by the owner
 
-- **Robot inputs only.** The model gets nothing a robot would not have: camera image, text, its
-  own pose. No gaze, no human body history, no known map of the scene.
-- **Indoor navigation.** No standing around, no outdoor walks.
-- Room maps and other truths may be used to train and to score, never as input.
+- **Robot inputs only:** camera image, text, its own head pose. No gaze, no body history at test
+  time, no known map. Maps may be used to train and to score.
+- **Indoor navigation** in homes.
+- **5 s**, and everything judged on homes never seen in training.
 
-## 3. Data that was prepared
+## 3. The head path (`gray/head.py`)
 
-All on Viper under `/ptmp/enazaren/gray`. Source: Nymeria, 1,074 recordings, 17.7 M frames at 15 per second.
+A flow model that predicts the clean path from the past head poses, image features, the image
+grid of the current frame and the sentence; in training it also predicts how far the way is
+free around the camera. Scored on 3,000 held-out moments (`gray/score.py`): does the path go when
+the sentence says so, does it reach a named object, does it go through something on the home's
+map (`gray/ground.py`: walls, plus what Aria measured in the same place in most recordings).
 
-| What | Folder | Note |
-|---|---|---|
-| Pinhole view, one vector per frame | `pinhole/` | the fisheye frame cut to a normal camera of 79.6 degrees; DINOv3 class token |
-| Image grid 7 x 7 per frame | `grids/` | the patch features of the same pass, 621 GB |
-| Estimated depth per frame | `depth/` | Depth Anything V2; turned out not to help |
-| Head path of each recording | `tracks/` | one continuous track, matches the old cache to 0.22 cm |
-| Moments | `moments/` | see below |
-| Room maps from annotated boxes | `layout/` | walls reliable, furniture boxes too rough |
-| Free and blocked space per home | `ground/` | the truth used now, see section 5 |
+| Run and sampling | Goes through something | Reaches the named object |
+|---|---:|---:|
+| `head-v3` (moments) | 40.8 % | 53.7 % |
+| `head-v4` (+ image grid) | 36.1 % | 50.4 % |
+| `head-v5` (+ free space as a training target) | 33.7 % | 58.0 % |
+| `head-v5`, 4 steps | 28.5 % | 61.6 % |
+| **`head-v5`, 4 steps, half the starting noise (the planner)** | **17.5 %** | **61.0 %** |
+| Recorded paths | 7.3 % | |
 
-**Moments.** Nymeria's narration describes each recording in pieces of 5 s, one sentence each. A
-moment is one piece: "now" is where the sentence begins, the model gets the 2 s before and
-predicts the 5 s the sentence describes. 167,796 moments; the navigation subset (indoor, mostly
-walking) has 44,754, of which 39,130 for training and 5,624 held out in homes never seen in training.
+- It goes when told in 85.5 % of the cases (people 92.0 %), reaches a named object in 61 %
+  against 25 % with the wrong sentence, and in the first second goes through something as rarely
+  as people do.
+- Less noise removes detours more than distance (`gray/travel.py`): the path gets a fifth shorter,
+  its end moves 9 %. Generated paths are a quarter shorter than recorded ones at the planner setting.
+- It does not read unseen rooms well (0.55 m against 0.28 m on training homes); most likely too
+  few homes (39). Depth, finer grids, earlier frames and another dataset (Ropedia) did not change that.
 
-## 4. Part one: the head path
+## 4. The body (`gray/motion.py`)
 
-**Model** (`gray/head.py`): a flow model that predicts the clean path. Input: past head poses
-and image vectors, the sentence, the image grid of the current frame. Output: the head poses of
-the next 5 s. In training it also has to say how far the way is free around the camera.
+Given the head path, generates the body (pose latents of STEER's motion codec and the pelvis
+path). `motion-v1`, 4 steps, noise 0.3, on held-out homes:
 
-**Runs, all scored on the same 3,000 held-out moments** (moments that go 1 m or further):
+- Pelvis 4.7 cm from the recorded one (6.0 cm without its own past; straight under the camera: 22 cm).
+- Along generated head paths the head joint stays 13 cm from the camera, as for recorded bodies.
+- Toes slide 30 cm/s while down, recorded 26 cm/s.
 
-| Run | What it adds | Goes through something | Reaches the named object |
-|---|---|---:|---:|
-| `head-v3` | moments | 40.8 % | 53.7 % |
-| `head-v4` | image grid of the current frame | 36.1 % | 50.4 % |
-| `head-v5` | free space as a training target | 33.7 % | 58.0 % |
-| `head-v6` | estimated depth as input | 34.1 % | 57.3 % |
-| `head-v5`, sampled in 4 steps | fewer sampling steps, no retraining | 28.5 % | 61.6 % |
-| `head-v5`, sampled in 1 step | | 26.0 % | 62.5 % |
-| `head-v5`, 4 steps, half the starting noise | less noise, no retraining | 17.5 % | 61.0 % |
-| `head-v5`, 4 steps, no noise (one path per moment) | | 13.9 % | 62.1 % |
+**HumanML3D for motion quality** (`gray/hml.py`, `gray/place.py`):
 
-Recorded paths: 7.3 %. Recorded paths turned by 90 degrees: 71.3 %.
+- Mixed in without images (`motion-v2`, `motion-v3`): no gain.
+- Placed into real recorded frames by rejection sampling: a HumanML3D motion's camera is put on
+  the recorded camera, and the pair is kept if over 5 s the path stays on walked floor, no body
+  part is inside a wall, and legs, trunk and head are clear of what stands in the room (a 3D map
+  from the measured points); hands may touch things. 6.6 % of 612,416 draws pass, 36,766 pairs.
+  Recorded bodies pass the same rule in 88 %, so it errs on the strict side.
+- Trained with these pairs (`head-v7`, `motion-v4`): no gain. Collisions 17.8 against 17.5 %,
+  goes when told 80.0 against 82.0 %, named object 54 against 61 % (58 moments), body unchanged.
+  HumanML3D has now been tried three ways without a gain on our measures; `head-v5` and
+  `motion-v1` stay the models.
 
-**What works**
+## 5. Against published models
 
-- It follows the text: it goes when the sentence mentions walking in 85.5 % of the cases
-  (people: 92.0 %), and in 12.3 % when it does not (people: 15.9 %).
-- It reaches a named object in about 60 % of the draws, against 25 % with the wrong sentence.
-- In the first second, which a system that replans executes, it goes through something about
-  as rarely as recorded paths do (0.9 to 2.1 % against 1.1 %).
+**UniEgoMotion** (released model, on its own Ego-Exo4D validation data, no text). Ours is the
+chain trained on its training data (`ee-head-v1`, `ee-motion-v1`). `gray/versus_uem.py`, 3,347 to
+3,678 clips, 22 joints, 5 s:
 
-**What does not**
+| Task | Given | UniEgoMotion | Ours | Pelvis travels: recorded / it / ours |
+|---|---|---:|---:|---|
+| Generation | the first frame | 33.9 cm | 32.3 cm | 0.76 / 0.59 / 0.72 m |
+| Forecasting | 2 s of camera path and images | 30.7 cm | 28.4 cm | 0.75 / 0.41 / 0.73 m |
+| Reconstruction | the whole camera path | 9.6 cm | 8.7 cm | fixed by the path |
 
-- Over the full 5 s one path in six to seven still goes through something (recorded: one in fourteen).
-- It cannot read the layout of a home it has not seen better than to about 0.55 m. On homes it
-  trained on it reaches 0.28 m: it learns rooms, not how to read a room. Most likely cause: only
-  39 training homes. No feature changed this (finer grids, depth, earlier frames).
+- Level or slightly ahead in all three; after aligning the pose the two are within 0.3 cm.
+- Standing still scores 22 cm in generation and forecasting, better than both: on this data joint
+  distance rewards not moving, so travel is reported next to it.
+- One saved sample of UniEgoMotion per task; ours varies by 0.3 cm over three seeds.
+- Videos on a plain floor: its body often stays where it starts; ours walks, often the wrong way.
 
-**Things tried that did not help:** text guidance at sampling; estimated depth; explorative
-training (best of K noises, arXiv 2607.27372).
+**EgoPriMo** (our reimplementation; no code was released), 1,500 held-out Nymeria moments, both
+given the frame at now and one sentence (`gray/versus_egoprimo.py`):
 
-**What helped without retraining:** fewer sampling steps and less starting noise. The path the
-model produces without noise is its best single guess; noise spreads the draws mostly into worse ones.
+| | Joints | Pelvis travels | Goes through something |
+|---|---:|---:|---:|
+| Recorded | | 1.97 m | 3.9 % |
+| Standing still | 83.9 cm | 0 | |
+| EgoPriMo reimplementation | 76.5 cm | 1.49 m | 27.1 % |
+| Ours, from one frame | 52.3 cm | 1.50 m | 12.6 % |
+| Ours, from one frame, full noise | 61.9 cm | 2.11 m | 26.1 % |
 
-**Decision (22 Nov, setting updated 23 Nov):** `head-v5` sampled in 4 steps with half the starting noise is the planner. The head path is good enough
-to move on. Open side task: choosing among several draws. Among 8 draws one is nearly always
-clear (3.7 %); picking by the model's own free-space estimate gives about 20 %.
+Part of the gap is sampling (ours with reduced noise, it without), part is that the test samples
+are our kind. The owner decided not to pursue it further.
 
-## 5. How paths are judged
+## 6. The comparator (parked)
 
-Not by distance to the recorded path, since many paths are valid for one sentence
-(`gray/score.py`):
+Predicts the image feature (`compare-v2`) or the 7 x 7 grid (`compare-v3`) along the head path
+with its uncertainty. Calibrated, and turning is explained away. Alarm rate one second ahead:
+5 % on the true frame (by construction), 13 to 16 % on the same unchanged place seen again, 50 %
+on the same place another day, 91 % on a different scene. Too many false alarms when nothing
+changed. `compare-v4` (revisits as targets) stopped at 2,500 of 20,000 steps.
 
-- **Goes when told:** gets 1 m or further, against whether the sentence mentions walking.
-- **Destination:** ends within 1 m of an object the sentence names.
-- **Goes through something:** a point in a blocked cell while moving faster than 0.5 m/s.
+## 7. Open
 
-The truth for the last one (`gray/ground.py`) took several rounds. The annotated furniture
-boxes are in the right place but include space people walk through. Now, per home and from all
-its recordings: **free** is where somebody walked upright; **blocked** is walls plus cells where
-Aria measured points in at least 30 % of the recordings; the rest is unknown.
-
-## 6. Part two: the comparator (in progress)
-
-**Model** (`gray/compare.py`): given the past, the sentence, the current image grid and the head
-poses of the next 5 s, predict what the camera will show at each of those frames, and how
-uncertain that is. One pass, no sampling.
-
-**Signal:** the "surprise", the error divided by the predicted uncertainty. It should be about
-1 when the world is as expected, whatever the head did.
-
-**`compare-v2`** (predicts the one vector per frame; trained on all moments), on unseen homes:
-
-- Mismatch 0.529, against 1.069 for copying the last frame.
-- Calibrated: surprise 1.10.
-- Turning is explained away: the raw mismatch rises from 0.34 to 0.75 with turning, the
-  surprise stays at 1.1.
-
-**Does it notice a changed world?** (`gray/alarm.py`.) Recordings have no unexpected changes,
-so the comparator is handed another frame than the true one. Alarm rate 1 s ahead, with a noise
-floor added to the uncertainty:
-
-| Observed frame | Alarm rate | Should be |
-|---|---:|---|
-| The true frame | 5 % | 5 % by construction |
-| The same place seen again later, nothing changed | 16 % | near 5 % |
-| The same place on another day | 50 % | clearly raised |
-| A different scene | 79 % | high |
-
-- The order is right and a different scene is caught four times in five.
-- Too many false alarms when nothing changed, and "another day" is not well separated from
-  that. Cause: the one vector per frame describes the whole image, including hands, people and
-  objects being handled.
-
-Averaging the alarm over five frames does not reduce the false alarms.
-
-**`compare-v3`** predicts the 7 x 7 image grid instead of the one vector. It predicts as well
-(mismatch 0.526 against 1.156 for copying, surprise 1.08, no alarm on turning) and catches a
-different scene more often: 91 % against 79 %. It does not lower the false alarms when nothing
-changed (16 %; 13 % when only the cells on the path are compared). So those false alarms do not
-come from the edges of the image. They are a matter of the first second, where the model is most
-sure and two views of an unchanged place differ by more than it allows for.
-
-**Next for the comparator:** train it with revisits as targets, so that its own uncertainty
-learns how much an unchanged place varies; and a test in Loc_08, where it is known which
-furniture stood where, to see whether a moved piece is noticed.
-
-## 7. Not started
-
-- **Body motion** given the head path. An earlier experiment on the old setup put the pelvis
-  7 cm from the recorded one when the head path was given, so it is expected to be the easier part.
-- **The closed loop** itself: plan, move, compare, replan.
-- **A test with a truly changed scene.** Needs a renderer or a robot. The rendered Loc_08 scene
-  gives image features that differ strongly from real ones (cosine 0.45), which is unsolved.
-
-## 8. In progress (23 Nov, afternoon): three things at once
-
-1. **Comparator.** `compare-v4` trains with revisits as targets (the same place seen again later
-   in the recording; 48 % of all frames have one), so that its uncertainty covers how an unchanged
-   place varies. Waiting in the queue (job 13603988); the alarm test follows. Then the test in
-   Loc_08 with known furniture positions.
-2. **Body motion: first model done** (`gray/motion.py`, `motion-v1`; checks in `gray/chain.py`).
-   Along a given head path it places the pelvis 4.7 cm from the recorded one on held-out homes
-   (6.0 cm without knowing its own past; straight under the camera would be 22 cm off), sampled in
-   4 steps with little noise. Along head paths generated by `head-v5` the decoded head joint stays
-   13 cm from the camera, as for recorded bodies, without drift over 5 s. Continuing from its own
-   output one second at a time costs nothing. Not yet looked at as a moving figure.
-3. **More homes** (Ropedia Xperience 2, `gray/ropedia.py`). Tested and not conclusive: of 105
-   indoor walk-throughs online only 41 have a usable mesh. Adding their 27 training scenes does
-   not improve reading held-out Nymeria homes (error 0.81 m against 0.82 m), and the two datasets
-   transfer poorly to each other. Too few and too different to say whether hundreds of homes
-   would help. Worth repeating when the rest of the dataset and its registration are published.
-
-## 9. Open decisions
-
-1. If the grid comparator does not cut the false alarms: what the comparator should compare.
-2. Whether to build a chooser among several drawn paths now or leave it.
-3. When to start on the body motion.
-4. The camera of the target robot. The Unitree G1's camera is, by its public description,
-   mounted 47.6 degrees below level on a head without a neck; set aside, not verified on a robot.
-
-## 10. Things worth knowing before changing anything
-
-- Windows of 8 s (`gray/joint.py`, runs `joint-v1`, `head-v1`, `head-v2`) are the earlier
-  setup, kept as baselines. New work uses moments.
-- Both models memorise the training homes. Keep the state that is best on held-out moments
-  (`compare.py` does), and judge on held-out homes only.
-- Opening the files of one recording takes about half a second on Viper's file system; data
-  loaders are slow for the first pass over the recordings.
-- Viper's 15-minute test partition starts jobs within minutes; the main queue can take hours.
-- Nothing in the repository is committed.
+See `BACKLOG.md` and section 8 of `HANDOFF.md`.
