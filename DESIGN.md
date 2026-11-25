@@ -1469,3 +1469,42 @@ By 2 s segments, generation: 0.249, 0.422, 0.518 and 0.560 m. Its measures also 
 penetration of the floor and time in the air. Its semantic measures need a text-motion model
 at a path on the authors' disk and were not run. These numbers have not been compared with the
 paper's table yet.
+
+### UniEgoMotion's data in our form, and our two models trained on it (25 Nov, `gray/ee4d.py`, jobs 13676077 and 13676082)
+
+`gray/ee4d.py convert` brings EE4D-Motion into the form of our samples: the SMPL-X body resampled
+from 10 to 30 frames per second and encoded with the motion autoencoder, the camera path with its
+axes named back to ours, and the released DINOv2 class token per frame (1024 numbers). Training
+split 14,852 segments, 82.5 h; validation 4,606 segments, 25.4 h; three quarters of the segments
+are 5.1 s or longer. Checks: camera heading against body facing cosine 0.93; decoding again puts
+the head joint 12.2 cm from the camera (11.5 cm in their joints). No text, no image grid, no maps.
+
+Trained on Viper with `jobs/submit.sh` (below), 40,000 steps each, done within the first 1-hour
+job (32 and 34 minutes; peak memory 8.7 and 13.4 GB). On 1,024 validation samples:
+
+| Model | Result |
+|---|---|
+| `ee-head-v1`, head path from the past 2 s of images and poses | one draw 26.9 cm from the recorded path (standing still: 22.2 cm); on samples that go 1 m or further 81.0 cm (standing still: 90.5 cm) |
+| `ee-motion-v1`, body along the recorded head path | pelvis 4.6 cm with the past body, 6.2 cm without (under the camera: 22.7 cm); yaw 7.7 and 10.8 degrees; latent 0.67 and 0.77 |
+
+The body model does as on Nymeria (4.7 and 6.0 cm). The head path, without text, is barely better
+than standing still by distance to the recorded path, as expected where nothing says where the
+person goes; this is the generation setting UniEgoMotion is in too. The comparison with
+UniEgoMotion on its validation clips, first 5 s, is next.
+
+### Running on any cluster (`jobs/submit.sh`, `jobs/clusters/`)
+
+One settings file per cluster (repository, data folder, interpreter, GPU options, partitions,
+GPU-specific settings) and one command on the workstation that asks every connected cluster when
+it would start a training and submits where that is soonest; `@data` in the arguments stands for
+the cluster's data folder. Viper is set up; Raven and MPI have settings files but no repository
+or data yet. Trainings on Nymeria stay on Viper, where its 700 GB of features are.
+
+### What went wrong on the workstation (25 Nov)
+
+Two trainings started there at once, detached, with 10 loader processes each, exhausted the
+memory and crashed the machine, twice. The same trainings on Viper peak at 8.7 and 13.4 GB (after
+the dataset was changed to read its arrays from disk), so the cause was not the size of the data
+as such; it was not found. The temporary working copy was lost with the first crash; the code now
+lives in the clone on the workstation and is pushed from there. Rule since: agree with the user
+where a computation runs; no training on the workstation by day.
