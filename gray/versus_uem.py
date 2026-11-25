@@ -61,6 +61,9 @@ def main() -> None:
     parser.add_argument("--uem", type=Path, required=True)
     parser.add_argument("--head-run", type=Path, required=True)
     parser.add_argument("--body-run", type=Path, required=True)
+    parser.add_argument("--steps", type=int, default=4, help="sampling steps of our two models")
+    parser.add_argument("--head-noise", type=float, default=0.5, help="starting noise of the head path (1: a full sample)")
+    parser.add_argument("--body-noise", type=float, default=0.3, help="starting noise of the body")
     parser.add_argument("--clips", type=int, default=None)
     parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--seed", type=int, default=0)
@@ -110,9 +113,9 @@ def main() -> None:
     for first in range(0, len(keys), args.batch):
         batch = to_device(collate([clips[i] for i in range(first, min(first + args.batch, len(keys)))]), device)
         past = head.anchored(batch)
-        path = head.sample(planner, batch, head_mean, head_std, 4, generator, amp, history=1, temperature=0.5, poses=True)
-        chain = motion.sample(model, batch, stats, 4, generator, amp, False, 0.3, head=torch.cat([past[:, :HISTORY], path], dim=1), history=1)
-        along = motion.sample(model, batch, stats, 4, generator, amp, False, 0.3, history=1)
+        path = head.sample(planner, batch, head_mean, head_std, args.steps, generator, amp, history=1, temperature=args.head_noise, poses=True)
+        chain = motion.sample(model, batch, stats, args.steps, generator, amp, False, args.body_noise, head=torch.cat([past[:, :HISTORY], path], dim=1), history=1)
+        along = motion.sample(model, batch, stats, args.steps, generator, amp, False, args.body_noise, history=1)
         recorded = motion.body_anchored(batch)[:, HISTORY:]
         made = {"our chain": decoder.joints(chain), "our body, recorded head path": decoder.joints(along), "recorded body through our encoder": decoder.joints(recorded)}
         slides["our chain"].append(feet(made["our chain"])[0].cpu())
@@ -153,8 +156,9 @@ def main() -> None:
     print("\nhow far the pelvis travels in the 5 s: " + "; ".join(f"{name} {r['mean']:.2f} m on average, 1 m or more in {r['over_1m']:.0%}" for name, r in result["pelvis_travel_m"].items()))
     result["foot_slide_cm_s"] = {name: float(torch.cat(values).mean()) for name, values in slides.items()}
     print(f"\ntoes slide while down (gray/chain.py): our chain {result['foot_slide_cm_s']['our chain']:.1f} cm/s, the recorded body through our encoder {result['foot_slide_cm_s']['recorded']:.1f} cm/s")
-    (args.body_run / "versus_uem.json").write_text(json.dumps(result, indent=1))
-    print(f"\nwrote {args.body_run / 'versus_uem.json'}", flush=True)
+    target = args.body_run / f"versus_uem-steps-{args.steps}-noise-{args.head_noise:g}-{args.body_noise:g}.json"
+    target.write_text(json.dumps(result, indent=1))
+    print(f"\nour sampling: {args.steps} steps, starting noise {args.head_noise:g} (head path) and {args.body_noise:g} (body)\nwrote {target}", flush=True)
 
 
 if __name__ == "__main__":
