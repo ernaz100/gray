@@ -71,7 +71,7 @@ def main() -> None:
     parser.add_argument("--head-noise", type=float, default=0.5, help="starting noise of the head path (1: a full sample)")
     parser.add_argument("--body-noise", type=float, default=0.3, help="starting noise of the body")
     parser.add_argument("--clips", type=int, default=None)
-    parser.add_argument("--videos", type=Path, default=None, help="with the task gen: write the bodies of a few clips here, for gray/versus_scene.py floor")
+    parser.add_argument("--videos", type=Path, default=None, help="write the bodies of a few clips per task here (<videos>/<task>/ for fore and recon), for gray/versus_scene.py floor")
     parser.add_argument("--video-clips", type=int, default=6, help="half of them among clips where the recorded pelvis goes 1 m or further")
     parser.add_argument("--tasks", nargs="+", default=["gen"], choices=("gen", "fore", "recon"), help="UniEgoMotion's tasks: generation, forecasting, reconstruction")
     parser.add_argument("--batch", type=int, default=256)
@@ -107,8 +107,7 @@ def main() -> None:
         from data.nymeria import to_actionplan as ap
 
         shape = Mesh(ap.MODEL, ap.rodrigues)
-        wanted = {True: args.video_clips // 2, False: args.video_clips - args.video_clips // 2}
-        notes = []
+
 
     data = EeMoments(args.ee4d, "val", jitter=False)
     index = {str(n): i for i, n in enumerate(data.names)}
@@ -139,6 +138,12 @@ def main() -> None:
         rows = {name: [] for name in names}
         moved = {name: [] for name in ("recorded", "UniEgoMotion", "our chain")}
         slides = {"recorded": [], "our chain": []}
+        if args.videos is not None:
+            # reconstruction: "ours" is our body model along the recorded head path (what that task compares); otherwise the chain
+            ours_name = "our body, recorded head path" if task == "recon" else "our chain"
+            folder = args.videos if task == "gen" else args.videos / task
+            wanted = {True: args.video_clips // 2, False: args.video_clips - args.video_clips // 2}
+            notes = []
         for first in range(0, len(keys), args.batch):
             batch = to_device(collate([clips[i] for i in range(first, min(first + args.batch, len(keys)))]), device)
             past = head.anchored(batch)
@@ -175,11 +180,12 @@ def main() -> None:
                     if name == "our chain":
                         moved[name].append(travel(placed))
                 goes = moved["recorded"][-1] >= 1.0
-                if args.videos is not None and task == "gen" and wanted[goes] > 0 and (first + b) % 37 == 0:  # spread over the clips
+                if args.videos is not None and task != "fore" and wanted[goes] > 0 and (first + b) % 37 == 0:  # spread over the clips
                     wanted[goes] -= 1
-                    work = args.videos / f"clip-{len(notes)}"
+                    work = folder / f"clip-{len(notes)}"
                     work.mkdir(parents=True, exist_ok=True)
-                    whole = torch.cat([whole_truth[b : b + 1, :HISTORY], chain[b : b + 1]], dim=1).float()
+                    body = along if task == "recon" else chain
+                    whole = torch.cat([whole_truth[b : b + 1, :HISTORY], body[b : b + 1]], dim=1).float()
                     smpl = ap.streamer272_to_smpl(decoder.codec.decode_with_root(whole[..., :32], whole[..., 32:]).cpu())
                     begin = whole[0, 0, 32:].cpu()
                     skin = about_up(shape.skin(smpl["poses"][0].double().numpy(), smpl["joints"][0, :, 0].double().numpy()), float(torch.atan2(begin[2], begin[3])), *begin[:2].tolist())[2 * HISTORY :]
@@ -191,10 +197,11 @@ def main() -> None:
                     for k, (label, verts) in enumerate((("recorded", surface(truth[key]["smpl_params"])), ("ours", None), ("UniEgoMotion", surface(theirs[key]["smpl_params"])))):
                         np.save(work / f"verts-{k}.npy", mine.astype(np.float32) if verts is None else (verts[low] * (1 - part) + verts[low + 1] * part).cpu().numpy().astype(np.float32))
                         np.save(work / f"faces-{k}.npy", shape.faces if verts is None else layer.faces.astype(np.int64))
-                    notes.append({"clip": key, "floor": float(real[..., 2].min()), "bodies": {
-                        "recorded": {"travel_m": moved["recorded"][-1]}, "ours": {"travel_m": moved["our chain"][-1], "joints_cm": rows["our chain"][-1][0] * 100},
+                    ours_travel = moved["our chain"][-1] if task == "gen" else travel(made[ours_name][b, ours_at].double() @ turn.T + shift)
+                    notes.append({"clip": key, "task": task, "floor": float(real[..., 2].min()), "bodies": {
+                        "recorded": {"travel_m": moved["recorded"][-1]}, "ours": {"travel_m": ours_travel, "joints_cm": rows[ours_name][-1][0] * 100},
                         "UniEgoMotion": {"travel_m": moved["UniEgoMotion"][-1], "joints_cm": rows["UniEgoMotion"][-1][0] * 100}}})
-                    (args.videos / "clips.json").write_text(json.dumps(notes, indent=1))
+                    (folder / "clips.json").write_text(json.dumps(notes, indent=1))
             print(f"  {task}: {min(first + args.batch, len(keys)):,d} clips", flush=True)
         given = {"gen": "from the first frame", "fore": "from the first 2 s (camera path and images); the 5 s after them", "recon": "UniEgoMotion is given the whole camera path and all images"}[task]
         table = {name: dict(zip(("joints_m", "aligned_m", "head_m", "pelvis_m"), np.mean(values, axis=0).tolist())) for name, values in rows.items()}

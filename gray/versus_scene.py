@@ -273,7 +273,8 @@ def floor(args: argparse.Namespace) -> None:
         for f in range(count):
             page = Image.new("RGB", (1500, 860), (249, 249, 247))
             draw = ImageDraw.Draw(page)
-            draw.text((30, 22), "Generation from the first frame", font=font(20, True), fill=(20, 20, 20))
+            recon = note.get("task", "gen") == "recon"
+            draw.text((30, 22), "Reconstruction from the head path" if recon else "Generation from the first frame", font=font(20, True), fill=(20, 20, 20))
             draw.text((30, 54), "UniEgoMotion's validation data, no text", font=font(14), fill=(95, 94, 90))
             for i, line in enumerate(textwrap.wrap(note["clip"].split("___")[0].replace("_", " "), 30)[:2]):
                 draw.text((30, 96 + 24 * i), line, font=font(17, True), fill=(20, 20, 20))
@@ -287,8 +288,9 @@ def floor(args: argparse.Namespace) -> None:
             draw.text((30, 420), f"{f / 30:0.1f} s", font=font(40, True), fill=(20, 20, 20))
             draw.rectangle((30, 480, 350, 488), fill=(225, 224, 217))
             draw.rectangle((30, 480, 30 + int(320 * (f + 1) / count), 488), fill=(42, 120, 214))
-            for i, line in enumerate(("All three start in the same place.", "Each model is given the first frame only:", "its image and, for ours, the camera's", "height and tilt.", "The floor squares are 0.5 m.",
-                                      "The room is not shown: this data has", "no scene geometry.")):
+            given = (("Both follow the recorded head path.", "UniEgoMotion is given the whole camera", "path and all images; ours the camera", "path and the first image only.") if recon else
+                     ("All three start in the same place.", "Each model is given the first frame only:", "its image and, for ours, the camera's", "height and tilt."))
+            for i, line in enumerate((*given, "The floor squares are 0.5 m.", "The room is not shown: this data has", "no scene geometry.")):
                 draw.text((30, 520 + 22 * i), line, font=font(14), fill=(95, 94, 90))
             page.paste(Image.open(work / "frames" / f"{f:04d}.png").convert("RGB"), (380, 60))
             page.save(work / "page" / f"{f:04d}.png")
