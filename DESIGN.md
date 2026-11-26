@@ -1751,3 +1751,51 @@ possible. Poses are anchored at the window's first frame. Windows that reach pas
 (`EeWindows` in `gray/ee4d.py`; 275,478 training windows from every frame that has 2 s after it, where the earlier
 models used only segments of 5.1 s or more). 60,000 steps each, as 3 jobs of 1 h. Hands and body shape are left as they are.
 Not yet written: the scoring in the paper's protocol.
+
+### head-v8: V-JEPA 2 in place of DINOv3 (26 Nov, extraction job 13732401, training 13738379, scored by 13743719 and 13743720)
+
+Question (owner): can a video encoder replace both DINOv3 inputs, so that the 2 s of history are
+always encoded together instead of as 30 separate frame vectors? `gray/vjepa.py` encodes, for every
+frame that can be now (each moment of the navigation subset, now moved by -5 to +15 frames; 904,832
+clips, 99 GB in `/ptmp/enazaren/gray/vjepa`), one clip with V-JEPA 2 ViT-L
+(`facebook/vjepa2-vitl-fpc64-256`): 16 frames, now - 30 to now every second frame, the same
+pinhole view as DINOv3 at 256 x 256. From its 8 x 16 x 16 tokens it keeps the last time slice
+averaged to 7 x 7 (the image grid at now) and each time slice averaged over the image (8 vectors;
+each of the 30 past frames is given the slice it falls in, `gray.moments.SLICE_OF_PAST`). The model
+sees the same 2 s as before; nothing from DINOv3. Everything else as head-v5 (free distance as a
+training target, 40,000 steps), `--images @data/vjepa --patches @data/vjepa --image-dim 1024`;
+27.4 M parameters. Extraction about 20 GPU-hours; training 1.5 h.
+
+Planner setting (4 steps, half the noise), the same 3,000 held-out moments:
+
+| | head-v5 (DINOv3) | head-v8 (V-JEPA 2) |
+|---|---:|---:|
+| Goes through something, all moments | 12.9 % | 12.6 % |
+| ... moments that go 1 m or further | 17.5 % | 17.0 % |
+| Touches a wall, moments that go | 8.9 % | 8.7 % |
+| Moving points where people walked, moments that go | 90.2 % | 91.3 % |
+| Goes (1 m or further) when the recorded person does | 84.2 % | 84.4 % |
+| One draw from the recorded path, all / moments that go | 47.4 / 59.4 cm | 46.6 / 58.3 cm |
+| With another moment's sentence, all moments | 82.6 cm | 79.9 cm |
+| Ends within 1 m of the named object (58 moments) | 61.0 % | 51.7 % |
+| ... with another moment's sentence | 21.6 % | 22.8 % |
+| Median distance to the named object at the end | 0.68 m | 1.00 m |
+| Free distance in view, held-out, walked / blocked (training log) | 0.57 / 0.61 m | 0.52 / 0.57 m |
+
+Full noise, 20 steps: goes through something 26.0 against 25.5 %, moments that go 33.7 against 33.1 %; one draw 56.3 against 55.6 cm.
+
+Reading:
+
+- On obstacles and distance V-JEPA is level or a little ahead (0.3 to 0.5 points, about 1 cm). On 3,000
+  moments that is within what another seed would change; it is not a gain to build on by itself.
+- The free distance on unseen homes is the first input change that moves it (0.57 to 0.52 m walked;
+  depth, finer grids and Ropedia did not). Small, but it is the measure that had not moved at all.
+- Reaching the named object is clearly worse (61 to 52 %, median 0.68 to 1.00 m). Only 58 moments, but
+  it is consistent with what V-JEPA is known for: motion and layout rather than what objects are.
+  DINOv3 is the stronger object feature. With the wrong sentence both are near 22 %, so V-JEPA's model
+  still uses the text, it just finds the object less well.
+- With another moment's sentence the path stays closer to the recorded one (79.9 against 82.6 cm):
+  the model leans a little more on the image and a little less on the text.
+- Not tried: both encoders together (DINOv3 grid plus V-JEPA history), which the two results above
+  suggest; V-JEPA's predictor as the comparator's target space.
+

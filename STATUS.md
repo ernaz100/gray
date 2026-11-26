@@ -37,6 +37,7 @@ map (`gray/ground.py`: walls, plus what Aria measured in the same place in most 
 | `head-v5` (+ free space as a training target) | 33.7 % | 58.0 % |
 | `head-v5`, 4 steps | 28.5 % | 61.6 % |
 | **`head-v5`, 4 steps, half the starting noise (the planner)** | **17.5 %** | **61.0 %** |
+| `head-v8`: V-JEPA 2 clips in place of all DINOv3 inputs, planner | 17.0 % | 51.7 % |
 | Recorded paths | 7.3 % | |
 
 - It goes when told in 85.5 % of the cases (people 92.0 %), reaches a named object in 61 %
@@ -46,6 +47,9 @@ map (`gray/ground.py`: walls, plus what Aria measured in the same place in most 
   its end moves 9 %. Generated paths are a quarter shorter than recorded ones at the planner setting.
 - It does not read unseen rooms well (0.55 m against 0.28 m on training homes); most likely too
   few homes (39). Depth, finer grids, earlier frames and another dataset (Ropedia) did not change that.
+- V-JEPA 2 in place of DINOv3 (`head-v8`, 26 Nov): obstacles level, the unseen-room free distance
+  slightly better (0.52 m), but the named object reached less often (52 % against 61 %, 58 moments).
+  head-v5 stays the planner; both encoders together is the next thing to try.
 
 ## 4. The body (`gray/motion.py`)
 

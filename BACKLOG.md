@@ -65,6 +65,11 @@ comparisons, UniEgoMotion matters most (a released model); EgoPriMo is not taken
 - [ ] **Motion quality measures** that do not need a recorded motion to compare with: foot sliding,
       and whether the feet are on the floor.
 
+- [x] **V-JEPA 2 in place of DINOv3** (`gray/vjepa.py`, `head-v8`, 26 Nov): level on obstacles (17.0 against 17.5 %),
+  free distance on unseen homes slightly better (0.52 against 0.57 m), named object worse (52 against 61 %, 58 moments).
+- [ ] Both encoders together: DINOv3 grid at now plus V-JEPA history (and/or V-JEPA grid as extra tokens).
+- [ ] V-JEPA as the comparator's target space (features meant to be predictable; fewer false alarms from texture?).
+
 ## Decided
 
 - EgoPriMo: not taken further (no sampling with our settings, no retraining); user, 25 Nov.
