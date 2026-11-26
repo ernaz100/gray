@@ -50,6 +50,8 @@ HISTORY, FUTURE = 30, 75
 DEPTH_SCALE = 0.42  # measured / estimated depth, the mean over the held-out recordings (gray/cloud.py)
 EARLY, LATE = 5, 15  # in training now is moved by up to 5 frames before and 15 after the start of the sentence
 OUT = Path("/ptmp/enazaren/gray/moments")
+# for gray/vjepa.py clips (frames now - 30, now - 28, ..., now in 8 slices of two): past frame j (now - 29 + j) lies in slice (j + 1) // 4
+SLICE_OF_PAST = np.minimum((np.arange(HISTORY) + 1) // 4, 7)
 
 
 def held_locations(cache: Path, holdout: float = 0.15) -> set[str]:
@@ -128,6 +130,8 @@ class Moments(Dataset):
     frame (105, 9), the image feature of the 30 past frames (30, 384), the text features of the
     sentence, and its row in the list. ``jitter`` moves now by -5 to +15 frames at random.
     ``patches``: a folder of gray/patches.py; the item then has the image grid of the frame at now.
+    ``images`` may be a folder of gray/vjepa.py (it has slices.npy): the 30 past image features are then the V-JEPA time
+    slice each frame falls in, from the one clip of the 2 s up to now (pass the same folder as ``patches`` for its grid).
     ``everything``: all moments of the split, not only the navigation subset. ``wide``: with jitter, now is moved by up to this
     many frames either way instead of -5 to +15 (37 covers a whole sentence, so any frame of a narrated recording can be now).
     ``future``: the item also has "target" (75, 384), the image feature of the 75 frames after now (for gray/compare.py).
@@ -173,8 +177,12 @@ class Moments(Dataset):
         if name not in self._open:
             folder = self.cache / name
             track = np.load(self.tracks / f"{name}.npz")
-            self._open[name] = {"pose": track["pose"], "floor": track["floor"], "valid": track["valid"], "image": np.load(self.images / name / "dino.npy", mmap_mode="r"),
+            clips = (self.images / name / "slices.npy").exists()  # gray/vjepa.py: one clip per now, not one vector per frame
+            self._open[name] = {"pose": track["pose"], "floor": track["floor"], "valid": track["valid"],
+                                "image": np.load(self.images / name / ("slices.npy" if clips else "dino.npy"), mmap_mode="r"),
                                 "text": np.load(folder / "text_tokens.npy", mmap_mode="r"), "length": np.load(folder / "text_lengths.npy")}
+            if clips:
+                self._open[name]["clip_rows"] = np.load(self.images / name / "rows.npy")
             if self.revisits is not None:
                 self._open[name]["again"] = np.load(self.revisits / f"{name}.npy")
             if self.body is not None:
@@ -193,7 +201,16 @@ class Moments(Dataset):
                 now = moved
         now += shift
         tensor = lambda values: torch.from_numpy(np.array(values, dtype=np.float32))  # noqa: E731
-        out = {"pose": tensor(a["pose"][now - HISTORY + 1 : now + FUTURE + 1]), "image": tensor(a["image"][now - HISTORY + 1 : now + 1]),
+        if "clip_rows" in a:  # the V-JEPA time slice each past frame falls in (8 slices of the 2 s, oldest first)
+            at = int(a["clip_rows"][now])
+            if at < 0:
+                raise KeyError(f"{name}, frame {now}: no V-JEPA clip in {self.images}")
+            if self.future:
+                raise ValueError("V-JEPA clips (gray/vjepa.py) have no per-frame features of the future")
+            past_image = a["image"][at][SLICE_OF_PAST]
+        else:
+            past_image = a["image"][now - HISTORY + 1 : now + 1]
+        out = {"pose": tensor(a["pose"][now - HISTORY + 1 : now + FUTURE + 1]), "image": tensor(past_image),
                "text": tensor(a["text"][sentence, : a["length"][sentence]]), "row": torch.tensor(row), "now": torch.tensor(now)}
         if self.patches is not None:
             at = int(a["rows"][now])
