@@ -171,6 +171,25 @@ ul.tight li { margin: .25rem 0; }
 .col .it span { color: var(--ink-2); font-size: .82rem; }
 .state { display: inline-block; font-size: .72rem; font-weight: 600; padding: .08rem .45rem; border-radius: 99px; border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
 .state.ok { color: #2e9e56; border-color: #2e9e56; } .state.go { color: var(--accent); border-color: var(--accent); } .state.wait { color: #d98a1f; border-color: #d98a1f; }
+svg.diag .cell { stroke: var(--border); stroke-width: 1; }
+svg.diag .cell.noise { fill: var(--ink); }
+svg.diag .cell.clean { fill: var(--accent); fill-opacity: .8; }
+svg.diag .cell.given { stroke: #2e9e56; stroke-width: 2.2; }
+svg.diag .cell.unused { fill: var(--surface); stroke: var(--muted); stroke-dasharray: 3 3; }
+svg.diag .cell.expect { fill: var(--accent-bg); stroke: var(--accent); stroke-dasharray: 3 3; }
+svg.diag .cell.match { fill: var(--accent); fill-opacity: .8; }
+svg.diag .cell.odd { fill: #d98a1f; }
+svg.diag .bar-fixed { fill: var(--surface); stroke: #a06bd6; stroke-width: 1.8; }
+svg.diag .bar-plan { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1.8; }
+svg.diag .bar-dropped { fill: none; stroke: var(--muted); stroke-dasharray: 5 4; }
+svg.diag .surprise { fill: var(--muted); } svg.diag .surprise.high { fill: #d98a1f; }
+svg.diag line.alarm { stroke: #d98a1f; stroke-width: 1.6; stroke-dasharray: 6 4; }
+svg.diag text.alarm { fill: #d98a1f; font: 600 12.5px system-ui, sans-serif; }
+.legend.cells span::before { width: 16px; height: 12px; border-radius: 3px; border: 1px solid var(--border); margin-bottom: 0; }
+.legend .c-clean::before { background: var(--accent); opacity: .8; }
+.legend .c-some::before { background: var(--ink); opacity: .42; }
+.legend .c-noise::before { background: var(--ink); opacity: .72; }
+.legend .c-given::before { background: var(--accent); border: 2px solid #2e9e56; }
 td.best { font-weight: 600; }
 .card.shot { max-width: 1500px; margin: .8rem 0 1.1rem; }
 .card.shot img { cursor: zoom-in; }
@@ -178,7 +197,7 @@ td.best { font-weight: 600; }
 <body>
 
 <header>
-  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 25 November 2026, evening. Taking over the project: start with HANDOFF.md in the repository.</div>
+  <div class="sub" style="margin-top:.2rem">Egocentric image and text in, motion out, with a comparator that notices when the world differs from what was expected. Research progress as of 26 November 2026. Taking over the project: start with HANDOFF.md in the repository.</div>
   <nav id="tabs"></nav>
 </header>
 <main id="panels">
@@ -199,7 +218,7 @@ td.best { font-weight: 600; }
   <h2>Right now</h2>
   <div class="board">
     <div class="col run"><h4>Running</h4>
-      <div class="it"><b>Nothing</b><span>No jobs on the clusters, nothing on the workstation.</span></div>
+      <div class="it"><b>ee-head-v2 and ee-motion-v2</b><span>Head path and body with a noise level per frame, on UniEgoMotion's data in 8 s windows (<code>gray/flex.py</code>). Submitted to Viper on 26 November, 60,000 steps each.</span></div>
     </div>
     <div class="col you"><h4>Waiting on a decision or access</h4>
       <div class="it"><b>Ego-Exo4D access</b><span>Pending. Needed to show UniEgoMotion in the rooms it was trained on (video and point cloud per recording).</span></div>
@@ -276,8 +295,239 @@ td.best { font-weight: 600; }
 </section>
 
 <section data-tab="Summary" id="summary" hidden>
-  <h2>The idea</h2>
-  <p class="lead"><b>Camera image and a sentence in, motion out</b>, with a check that notices when the world is not as expected and triggers a new plan. This page is about the first stage, the head path.</p>
+  <h2>The idea, in four pictures</h2>
+  <p class="lead"><b>ActionPlan plans before it moves. We keep its two steps and swap the plan:</b> in place of an action per frame, the path of the head through the room. A path can be checked against what the camera shows, which is what makes replanning possible.</p>
+
+  <h3>1 · ActionPlan: first the plan, then the motion</h3>
+  <p>One token per frame holds a plan part (which action happens in that frame, as a text feature) and a motion part. Each part has its own noise level, so one network can first denoise the plan from the prompt and then the motion given the plan.</p>
+  <svg class="diag" viewBox="0 0 1240 150" role="img" aria-label="ActionPlan: the plan is denoised first, then the motion">
+    <defs><marker id="arra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker></defs>
+    <text x="20" y="14">ActionPlan</text><text class="d" x="20" y="32">text to motion</text>
+    <rect class="bx" x="20" y="58" width="160" height="66" rx="9"/>
+    <text x="100" y="82" text-anchor="middle">a prompt</text><text class="d" x="100" y="100" text-anchor="middle">text only</text>
+    <text class="d" x="266" y="76" text-anchor="end">plan</text>
+    <text class="d" x="266" y="108" text-anchor="end">motion</text>
+    <text x="276" y="30">1 · Denoise the plan</text><text class="d" x="276" y="47">one noise level for the clip; motion still pure noise</text>
+    <rect class="cell noise" x="276" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="300" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="324" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="348" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="372" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="396" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="420" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="444" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="468" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="492" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="516" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="540" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="564" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="588" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="276" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="300" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="324" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="348" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="372" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="396" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="420" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="444" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="468" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="492" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="516" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="540" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="564" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="588" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <text x="664" y="30">2 · Denoise the motion</text><text class="d" x="664" y="47">plan fixed; a noise level per frame</text>
+    <rect class="cell clean" x="664" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="688" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="712" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="736" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="760" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="784" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="808" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="832" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="856" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="880" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="904" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="928" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="952" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="976" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell noise" x="664" y="90" width="22" height="26" rx="3" fill-opacity="0.18"/>
+    <rect class="cell noise" x="688" y="90" width="22" height="26" rx="3" fill-opacity="0.30"/>
+    <rect class="cell noise" x="712" y="90" width="22" height="26" rx="3" fill-opacity="0.24"/>
+    <rect class="cell noise" x="736" y="90" width="22" height="26" rx="3" fill-opacity="0.48"/>
+    <rect class="cell noise" x="760" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="784" y="90" width="22" height="26" rx="3" fill-opacity="0.60"/>
+    <rect class="cell noise" x="808" y="90" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="832" y="90" width="22" height="26" rx="3" fill-opacity="0.66"/>
+    <rect class="cell noise" x="856" y="90" width="22" height="26" rx="3" fill-opacity="0.54"/>
+    <rect class="cell noise" x="880" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="904" y="90" width="22" height="26" rx="3" fill-opacity="0.48"/>
+    <rect class="cell noise" x="928" y="90" width="22" height="26" rx="3" fill-opacity="0.66"/>
+    <rect class="cell noise" x="952" y="90" width="22" height="26" rx="3" fill-opacity="0.60"/>
+    <rect class="cell noise" x="976" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <line class="arrow" x1="618" y1="87" x2="654" y2="87" marker-end="url(#arra)"/>
+    <line class="arrow" x1="1006" y1="87" x2="1036" y2="87" marker-end="url(#arra)"/>
+    <rect class="bx done" x="1040" y="58" width="180" height="66" rx="9"/>
+    <text x="1130" y="82" text-anchor="middle">motion</text><text class="d" x="1130" y="100" text-anchor="middle">that follows the plan</text>
+    <text class="lab" x="276" y="134">frames of the clip, in time →</text>
+  </svg>
+
+  <h3>2 · Ours: the head path takes the place of the plan</h3>
+  <p>The same two steps, with the head path as the plan and the body as the motion. Every frame has its own noise level: a frame that is given (a pose already reached, a body already known) is simply a clean one, so the first frame, the first 2 s or the whole head path can be given without training a model for each case.</p>
+  <svg class="diag" viewBox="0 0 1240 150" role="img" aria-label="Ours: the head path is denoised first, then the body">
+    <defs><marker id="arrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker></defs>
+    <text x="20" y="14">Ours</text><text class="d" x="20" y="32">what the camera sees, and text, to motion</text>
+    <rect class="bx" x="20" y="58" width="160" height="66" rx="9"/>
+    <text x="100" y="82" text-anchor="middle">image + prompt</text><text class="d" x="100" y="100" text-anchor="middle">and any given frames</text>
+    <text class="d" x="266" y="76" text-anchor="end">head path</text>
+    <text class="d" x="266" y="108" text-anchor="end">body</text>
+    <text x="276" y="30">1 · Denoise the head path</text><text class="d" x="276" y="47">where the camera goes; given frames stay clean</text>
+    <rect class="cell clean given" x="276" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="300" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="324" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell noise" x="348" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="372" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="396" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="420" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="444" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="468" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="492" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="516" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="540" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="564" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell noise" x="588" y="58" width="22" height="26" rx="3" fill-opacity="0.42"/>
+    <rect class="cell clean given" x="276" y="90" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="300" y="90" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="324" y="90" width="22" height="26" rx="3"/>
+    <rect class="cell noise" x="348" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="372" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="396" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="420" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="444" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="468" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="492" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="516" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="540" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="564" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <rect class="cell noise" x="588" y="90" width="22" height="26" rx="3" fill-opacity="0.72"/>
+    <text x="664" y="30">2 · Denoise the body</text><text class="d" x="664" y="47">along the head path; given frames stay clean</text>
+    <rect class="cell clean given" x="664" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="688" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="712" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="736" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="760" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="784" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="808" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="832" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="856" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="880" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="904" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="928" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="952" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean" x="976" y="58" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="664" y="90" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="688" y="90" width="22" height="26" rx="3"/>
+    <rect class="cell clean given" x="712" y="90" width="22" height="26" rx="3"/>
+    <rect class="cell noise" x="736" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="760" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="784" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="808" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="832" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="856" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="880" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="904" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="928" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="952" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <rect class="cell noise" x="976" y="90" width="22" height="26" rx="3" fill-opacity="0.36"/>
+    <line class="arrow" x1="618" y1="87" x2="654" y2="87" marker-end="url(#arrb)"/>
+    <line class="arrow" x1="1006" y1="87" x2="1036" y2="87" marker-end="url(#arrb)"/>
+    <rect class="bx done" x="1040" y="58" width="180" height="66" rx="9"/>
+    <text x="1130" y="82" text-anchor="middle">motion</text><text class="d" x="1130" y="100" text-anchor="middle">that follows the head path</text>
+    <text class="lab" x="276" y="134">frames of the clip, in time →</text>
+  </svg>
+  <div class="legend cells"><span class="c-clean">clean</span><span class="c-some">some noise</span><span class="c-noise">pure noise</span><span class="c-given">given, not generated</span></div>
+  <p class="small">Differences from ActionPlan besides the swap: ours also sees the camera image, and the two steps are two networks (<code>gray/flex.py</code>, trained as <code>ee-head-v2</code> and <code>ee-motion-v2</code> on 26 November; the models before them had one noise level per sample and a fixed 2 s given).</p>
+
+  <h3>3 · UniEgoMotion and EgoPriMo: generated once, never updated</h3>
+  <p>Both take their conditions at the start and return a whole clip. Nothing the camera sees while the motion plays can change it, so neither can be used as it is to walk through a room that differs from what the first image suggested.</p>
+  <svg class="diag" viewBox="0 0 1240 262" role="img" aria-label="UniEgoMotion and EgoPriMo generate 8 s of motion once and do not look again">
+    <defs><marker id="arrc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker></defs>
+    <rect class="bx" x="20" y="34" width="200" height="50" rx="9"/>
+    <text x="120" y="55" text-anchor="middle">the first image</text><text class="d" x="120" y="72" text-anchor="middle">no text; or 2 s of video</text>
+    <line class="arrow" x1="220" y1="59" x2="256" y2="59" marker-end="url(#arrc)"/>
+    <rect class="bx ext" x="260" y="34" width="170" height="50" rx="9"/>
+    <text x="345" y="64" text-anchor="middle">UniEgoMotion</text>
+    <line class="arrow" x1="430" y1="59" x2="466" y2="59" marker-end="url(#arrc)"/>
+    <rect class="bar-fixed" x="470" y="40" width="740" height="38" rx="6"/>
+    <text x="484" y="64">8 s of motion, generated in one go</text>
+    <rect class="bx" x="20" y="104" width="200" height="50" rx="9"/>
+    <text x="120" y="125" text-anchor="middle">an image + a prompt</text><text class="d" x="120" y="142" text-anchor="middle">the frame at the start</text>
+    <line class="arrow" x1="220" y1="129" x2="256" y2="129" marker-end="url(#arrc)"/>
+    <rect class="bx ext" x="260" y="104" width="170" height="50" rx="9"/>
+    <text x="345" y="134" text-anchor="middle">EgoPriMo</text>
+    <line class="arrow" x1="430" y1="129" x2="466" y2="129" marker-end="url(#arrc)"/>
+    <rect class="bar-fixed" x="470" y="110" width="740" height="38" rx="6"/>
+    <text x="484" y="134">8 s of motion, generated in one go</text>
+    <text class="d" x="458" y="191" text-anchor="end">what the camera sees on the way</text>
+    <rect class="cell unused" x="566" y="172" width="34" height="28" rx="4"/><rect class="cell unused" x="659" y="172" width="34" height="28" rx="4"/><rect class="cell unused" x="752" y="172" width="34" height="28" rx="4"/><rect class="cell unused" x="844" y="172" width="34" height="28" rx="4"/><rect class="cell unused" x="936" y="172" width="34" height="28" rx="4"/><rect class="cell unused" x="1029" y="172" width="34" height="28" rx="4"/><rect class="cell unused" x="1122" y="172" width="34" height="28" rx="4"/>
+    <text class="lab" x="1164" y="191">never used</text>
+    <line class="alarm" x1="748" y1="14" x2="748" y2="210"/>
+    <text class="alarm" x="756" y="20">a door is shut, a chair was moved: the motion goes on as generated</text>
+    <line class="arrow" x1="470" y1="228" x2="1210" y2="228"/>
+    <line class="arrow" x1="470" y1="224" x2="470" y2="232"/><text class="io" x="470" y="246" text-anchor="middle">0 s</text>
+    <line class="arrow" x1="562" y1="224" x2="562" y2="232"/><text class="io" x="562" y="246" text-anchor="middle">1 s</text>
+    <line class="arrow" x1="655" y1="224" x2="655" y2="232"/><text class="io" x="655" y="246" text-anchor="middle">2 s</text>
+    <line class="arrow" x1="748" y1="224" x2="748" y2="232"/><text class="io" x="748" y="246" text-anchor="middle">3 s</text>
+    <line class="arrow" x1="840" y1="224" x2="840" y2="232"/><text class="io" x="840" y="246" text-anchor="middle">4 s</text>
+    <line class="arrow" x1="932" y1="224" x2="932" y2="232"/><text class="io" x="932" y="246" text-anchor="middle">5 s</text>
+    <line class="arrow" x1="1025" y1="224" x2="1025" y2="232"/><text class="io" x="1025" y="246" text-anchor="middle">6 s</text>
+    <line class="arrow" x1="1118" y1="224" x2="1118" y2="232"/><text class="io" x="1118" y="246" text-anchor="middle">7 s</text>
+    <line class="arrow" x1="1210" y1="224" x2="1210" y2="232"/><text class="io" x="1210" y="246" text-anchor="middle">8 s</text>
+  </svg>
+  <p class="small">UniEgoMotion as released (8 s clips, no text); EgoPriMo in our reimplementation (8 s windows). Either could be called again from a later frame, but nothing in them says when.</p>
+
+  <h3>4 · Our idea: a plan that says what the camera should show</h3>
+  <p>Because the plan is a head path, a second model can say what the camera should show along it. While moving, that is compared with what the camera does show. A large difference, relative to how uncertain the expectation was, is a <b>surprise</b>: something unexpected or new. The plan is dropped there and a new one is made from the current frame, with the frames so far as given frames.</p>
+  <svg class="diag" viewBox="0 0 1240 312" role="img" aria-label="Ours: the plan comes with what the camera should show; a surprise triggers a new plan">
+    <defs><marker id="arrd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker></defs>
+    <rect class="bx" x="20" y="34" width="200" height="50" rx="9"/>
+    <text x="120" y="55" text-anchor="middle">image + prompt</text><text class="d" x="120" y="72" text-anchor="middle">and the frames so far</text>
+    <line class="arrow" x1="220" y1="59" x2="256" y2="59" marker-end="url(#arrd)"/>
+    <rect class="bx done" x="260" y="34" width="170" height="50" rx="9"/>
+    <text x="345" y="55" text-anchor="middle">head path, then body</text><text class="d" x="345" y="72" text-anchor="middle">a plan of 5 s</text>
+    <line class="arrow" x1="430" y1="59" x2="466" y2="59" marker-end="url(#arrd)"/>
+    <rect class="bar-plan" x="470" y="40" width="278" height="38" rx="6"/>
+    <rect class="bar-dropped" x="748" y="40" width="185" height="38" rx="6"/>
+    <text x="484" y="64">plan 1</text><text class="lab" x="782" y="64">rest of plan 1, dropped</text>
+    <text class="d" x="458" y="118" text-anchor="end">what the camera should show</text>
+    <rect class="cell expect" x="566" y="100" width="34" height="24" rx="4"/><rect class="cell expect" x="659" y="100" width="34" height="24" rx="4"/><rect class="cell expect" x="752" y="100" width="34" height="24" rx="4"/><rect class="cell expect" x="844" y="100" width="34" height="24" rx="4"/><rect class="cell expect" x="936" y="100" width="34" height="24" rx="4"/>
+    <text class="d" x="458" y="152" text-anchor="end">what it does show</text>
+    <rect class="cell match" x="566" y="134" width="34" height="24" rx="4"/><rect class="cell match" x="659" y="134" width="34" height="24" rx="4"/><rect class="cell odd" x="752" y="134" width="34" height="24" rx="4"/>
+    <text class="d" x="458" y="192" text-anchor="end">surprise</text>
+    <line class="arrow" x1="470" y1="200" x2="778" y2="200"/>
+    <rect class="surprise" x="574" y="195" width="18" height="5" rx="2"/><rect class="surprise" x="667" y="193" width="18" height="7" rx="2"/><rect class="surprise high" x="760" y="170" width="18" height="30" rx="2"/>
+    <line class="alarm" x1="768" y1="26" x2="768" y2="220"/>
+    <text class="alarm" x="778" y="20">not what was expected: plan again from here</text>
+    <rect class="bar-plan" x="768" y="222" width="442" height="38" rx="6"/>
+    <text x="782" y="246">plan 2, from what the camera shows now</text>
+    <path class="arrow" d="M 764 241 L 140 241 Q 120 241 120 221 L 120 90" marker-end="url(#arrd)" stroke-dasharray="5 4"/>
+    <text class="lab" x="440" y="233" text-anchor="middle">plan again, with the frames so far as given frames</text>
+    <line class="arrow" x1="470" y1="284" x2="1210" y2="284"/>
+    <line class="arrow" x1="470" y1="280" x2="470" y2="288"/><text class="io" x="470" y="302" text-anchor="middle">0 s</text>
+    <line class="arrow" x1="562" y1="280" x2="562" y2="288"/><text class="io" x="562" y="302" text-anchor="middle">1 s</text>
+    <line class="arrow" x1="655" y1="280" x2="655" y2="288"/><text class="io" x="655" y="302" text-anchor="middle">2 s</text>
+    <line class="arrow" x1="748" y1="280" x2="748" y2="288"/><text class="io" x="748" y="302" text-anchor="middle">3 s</text>
+    <line class="arrow" x1="840" y1="280" x2="840" y2="288"/><text class="io" x="840" y="302" text-anchor="middle">4 s</text>
+    <line class="arrow" x1="932" y1="280" x2="932" y2="288"/><text class="io" x="932" y="302" text-anchor="middle">5 s</text>
+    <line class="arrow" x1="1025" y1="280" x2="1025" y2="288"/><text class="io" x="1025" y="302" text-anchor="middle">6 s</text>
+    <line class="arrow" x1="1118" y1="280" x2="1118" y2="288"/><text class="io" x="1118" y="302" text-anchor="middle">7 s</text>
+    <line class="arrow" x1="1210" y1="280" x2="1210" y2="288"/><text class="io" x="1210" y="302" text-anchor="middle">8 s</text>
+  </svg>
+  <div class="callout"><div class="h">What exists of this</div>
+    <p>Steps 1 and 2 of picture 2 work and are compared with both baselines (Status tab). The comparator exists as a first model and is parked: it raises an alarm in 91 % of cases when shown a different scene, but also in 13 to 16 % on an unchanged one. The loop itself, replanning on a surprise, is not built yet.</p></div>
+
+  <h2>The parts, and this page</h2>
+  <p class="lead">The rest of this page is about the first stage, the head path, on Nymeria.</p>
   <div class="pipe">
     <div class="stage"><div class="t">Sees and is told</div><div class="d">camera image, a sentence, its own pose</div></div>
     <div class="stage" style="border-color: var(--accent); border-width: 2px;"><div class="t">1 · Plans the head path</div><div class="d">where the camera goes in the next 5 s</div><div class="s"><b>This page</b></div></div>

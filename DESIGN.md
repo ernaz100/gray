@@ -1715,3 +1715,39 @@ path, 4 steps and noise 0.3 for the body.
   their sentences describe the body, not the room ("a person walks forward slowly"), so they
   teach the head-path model little about where to go in a room; and our measures may not capture
   what HumanML3D adds (variety of motion), which no measure here looks at.
+
+### UniEgoMotion's numbers in the paper, and what ours are (26 Nov)
+
+The tables above are not the paper's protocol: 5 s, every 0.2 s, 3,347 to 3,678 clips, a rigid fit without scale. The
+paper (arXiv 2508.01126, tables 1 and 2) scores all 4,405 validation clips, which are 2.1 to 8 s long, generation over
+0 to 2 s, forecasting over 2 to 4 s, reconstruction over the whole clip, with a per-frame fit that includes scale.
+Its numbers next to what its own scripts gave for the released model here (the table of 25 Nov above):
+
+| Task | Measure | Paper | Released model, its scripts, here |
+|---|---|---:|---:|
+| Reconstruction | MPJPE | 0.100 m | 0.109 m |
+| | after alignment | 0.053 | 0.073 |
+| | head position | 0.058 | 0.058 |
+| | foot slide | 3.62 | 3.58 |
+| Generation, 0 to 2 s | MPJPE | 0.226 | 0.249 |
+| | foot slide | 2.89 | 2.87 |
+| Forecasting | MPJPE | 0.206 (2 to 4 s) | 0.271 (all 6 s; not the same window) |
+| | foot slide | 2.60 | 2.61 |
+
+Why the released model is 1 to 2 cm behind the paper where the windows match was not looked into. Of the 727 clips
+missing from our generation table, 680 only lack 5 s after now; 47 are from segments our conversion left out.
+Decided with the owner: a comparison in the paper's protocol (its clips, its windows, its metric scripts on a file
+of ours in its format), with average body proportions and without hands, which our body does not have.
+
+### A noise level per frame: `gray/flex.py`, `ee-head-v2` and `ee-motion-v2` (26 Nov, jobs 13737755 to 13737757 and 13737759 to 13737761)
+
+`gray/head.py` and `gray/motion.py` have one noise level per sample and a fixed split: 2 s given, 5 s generated; the
+body model always gets the whole head path. UniEgoMotion's tasks give other things (all images and the whole camera
+path; 2 s of them; one frame) over clips of up to 8 s. `gray/flex.py` has no split: a window of `--frames` frames
+(120 for this data; a Nymeria moment would be 105), a noise level per frame, 1 where the frame is given. Per frame the
+head model may be given the head pose and the image; the body model the body, the head pose and the image. In training
+what is given is drawn per sample: the first frames (any number that leaves 1 s), scattered frames, or as little as
+possible. Poses are anchored at the window's first frame. Windows that reach past the end of a segment are shorter
+(`EeWindows` in `gray/ee4d.py`; 275,478 training windows from every frame that has 2 s after it, where the earlier
+models used only segments of 5.1 s or more). 60,000 steps each, as 3 jobs of 1 h. Hands and body shape are left as they are.
+Not yet written: the scoring in the paper's protocol.
