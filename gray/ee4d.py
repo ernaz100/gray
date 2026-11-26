@@ -24,6 +24,7 @@ Checked on the validation split (25 Nov 2026): the camera's heading and the body
 camera (11.5 cm in their own joints).
 
 ``EeMoments`` gives samples from it shaped like the moments of gray/moments.py: up to 30 frames given, 75 generated, no text.
+``EeWindows`` gives windows of any length (8 s for UniEgoMotion's clips) with an image feature per frame, for gray/flex.py.
 """
 
 from __future__ import annotations
@@ -142,6 +143,21 @@ def convert(args) -> None:
     print(f"in {len(agree)} segments that travel 2 m or further, the camera's heading has cosine {np.mean(agree):.2f} with the direction of travel")
 
 
+def arrays(folder: Path, split: str) -> tuple:
+    """What convert wrote: latent, pose, pelvis, yaw, image (per frame, all segments end to end), names and start (per segment)."""
+    apart = folder / f"gray_{split}"
+    if apart.is_dir():  # one file per array (the unpack step): read from disk as needed, so that loader processes share them
+        d = {key: np.load(apart / f"{key}.npy", mmap_mode="r") for key in ("latent", "pose", "pelvis", "yaw")} | {key: np.load(apart / f"{key}.npy") for key in ("start", "names")}
+    else:
+        d = np.load(folder / f"gray_{split}.npz")
+    return d["latent"], d["pose"], d["pelvis"], d["yaw"], np.load(folder / f"gray_{split}_image.npy", mmap_mode="r"), d["names"], d["start"]
+
+
+def body_rows(latent: np.ndarray, pelvis: np.ndarray, yaw: np.ndarray, rows: np.ndarray) -> torch.Tensor:
+    """The body in the given frames (len(rows), 36): the pose latent, pelvis x and z, sine and cosine of the root yaw."""
+    return torch.from_numpy(np.concatenate([latent[rows], pelvis[rows][:, [0, 2]], np.sin(yaw[rows])[:, None], np.cos(yaw[rows])[:, None]], axis=1).astype(np.float32))
+
+
 class EeMoments(torch.utils.data.Dataset):
     """Stretches of EE4D-Motion segments as samples: up to 30 frames before now and the 75 after it; "image" has 1024 numbers per frame; no text.
 
@@ -149,14 +165,8 @@ class EeMoments(torch.utils.data.Dataset):
     """
 
     def __init__(self, folder: Path, split: str, every: int = 15, jitter: bool = True, starts: list[tuple[int, int]] | None = None) -> None:
-        apart = folder / f"gray_{split}"
-        if apart.is_dir():  # one file per array (the unpack step): read from disk as needed, so that loader processes share them
-            d = {key: np.load(apart / f"{key}.npy", mmap_mode="r") for key in ("latent", "pose", "pelvis", "yaw")} | {key: np.load(apart / f"{key}.npy") for key in ("start", "names")}
-        else:
-            d = np.load(folder / f"gray_{split}.npz")
-        self.latent, self.pose, self.pelvis, self.yaw = d["latent"], d["pose"], d["pelvis"], d["yaw"]
-        self.image = np.load(folder / f"gray_{split}_image.npy", mmap_mode="r")
-        self.names, self.start, self.jitter, self.every = d["names"], d["start"], jitter and starts is None, every
+        self.latent, self.pose, self.pelvis, self.yaw, self.image, self.names, self.start = arrays(folder, split)
+        self.jitter, self.every = jitter and starts is None, every
         if starts is not None:
             picked = [(i, int(self.start[i]), int(self.start[i + 1]), s) for i, s in starts]
         else:
@@ -170,10 +180,40 @@ class EeMoments(torch.utils.data.Dataset):
         segment, a, b, s = (int(v) for v in self.samples[index])
         now = a + min(s + (int(torch.randint(0, self.every, (1,))) if self.jitter else 0), b - a - 76)
         rows = np.clip(np.arange(now - 29, now + 76), a, b - 1)
-        own = np.concatenate([self.latent[rows], self.pelvis[rows][:, [0, 2]], np.sin(self.yaw[rows])[:, None], np.cos(self.yaw[rows])[:, None]], axis=1)
         return {"pose": torch.from_numpy(self.pose[rows].copy()), "image": torch.from_numpy(np.array(self.image[rows[:30]], dtype=np.float32)),
-                "text": torch.zeros(0, 768), "row": torch.tensor(segment), "now": torch.tensor(now - a), "body": torch.from_numpy(own.astype(np.float32)),
+                "text": torch.zeros(0, 768), "row": torch.tensor(segment), "now": torch.tensor(now - a), "body": body_rows(self.latent, self.pelvis, self.yaw, rows),
                 "body_known": torch.tensor(True), "foreign": torch.tensor(False), "history_max": torch.tensor(min(now - a + 1, 30))}
+
+
+class EeWindows(torch.utils.data.Dataset):
+    """Windows of up to ``frames`` frames for gray/flex.py, from any frame of a segment on: head poses, an image feature and the body per frame.
+
+    A window that reaches past the end of its segment is filled up with the last frame, and "exists" says which frames are real.
+    ``starts``: (segment, first frame) pairs to use in place of the regular grid (for scoring on given clips).
+    """
+
+    LEAST = 30  # a window has at least this many real frames (2 s)
+
+    def __init__(self, folder: Path, split: str, frames: int = 120, every: int = 15, jitter: bool = True, starts: list[tuple[int, int]] | None = None) -> None:
+        self.latent, self.pose, self.pelvis, self.yaw, self.image, self.names, self.start = arrays(folder, split)
+        self.frames, self.every, self.jitter = frames, every, jitter and starts is None
+        if starts is None:
+            starts = [(i, s) for i, count in enumerate(np.diff(self.start)) for s in range(0, int(count) - self.LEAST + 1, every)]
+        self.samples = np.array(starts, dtype=np.int64).reshape(-1, 2)
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+        segment, s = (int(v) for v in self.samples[index])
+        a, b = int(self.start[segment]), int(self.start[segment + 1])
+        if self.jitter:
+            s = min(s + int(torch.randint(0, self.every, (1,))), max(b - a - self.LEAST, 0))
+        rows = a + s + np.arange(self.frames)
+        exists, rows = rows < b, np.minimum(rows, b - 1)
+        return {"pose": torch.from_numpy(self.pose[rows].copy()), "image": torch.from_numpy(np.array(self.image[rows], dtype=np.float32)),
+                "body": body_rows(self.latent, self.pelvis, self.yaw, rows), "exists": torch.from_numpy(exists), "text": torch.zeros(0, 768),
+                "row": torch.tensor(segment), "first": torch.tensor(s)}
 
 
 def unpack(args) -> None:
