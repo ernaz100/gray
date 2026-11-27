@@ -1829,3 +1829,60 @@ Reading:
 - Not tried: both encoders together (DINOv3 grid plus V-JEPA history), which the two results above
   suggest; V-JEPA's predictor as the comparator's target space.
 
+### How many moments need memory (`gray/recall.py`, 27 Nov, job 13788234)
+
+Question (owner): V-JEPA or anything else that looks further back can only be shown to help on moments where the place
+to go is not in view. Counted from the head paths alone, for every moment that goes 1 m or further: when was the target
+last in view of the camera, up to now? In view: inside the 79.6 degree pinhole view, 0.3 to 8 m away, same storey, no wall
+of the room map between; the target is taken 0.8 m above the floor. Furniture is not checked. (The first job, 13786708,
+hung in forked workers that called torch and ran into its 15 min limit; the workers now use numpy only.)
+
+| Last in view | Where the head is after 5 s, held out (4,102) | The named object, held out (109) | Where the head is after 5 s, training (27,920) |
+|---|---:|---:|---:|
+| at now | 37.6 % | 36.7 % | 37.4 % |
+| not now, within the 2 s given | 14.2 % | 7.3 % | 13.6 % |
+| 2 to 10 s before | 21.4 % | 22.0 % | 20.9 % |
+| 10 to 30 s before | 14.0 % | 19.3 % | 14.3 % |
+| 30 to 60 s before | 5.0 % | 3.7 % | 5.3 % |
+| longer ago | 6.0 % | 4.6 % | 6.5 % |
+| never before now | 1.7 % | 6.4 % | 2.0 % |
+
+- In 46 % of the held-out moments (about 1,900) the place the person goes to was last seen before the 2 s the models are
+  given; three quarters of those within the last 30 s. That is a test set for memory, and 13,000 training moments of the
+  same kind exist.
+- The named object gives only 54 such moments: a side check, not the measure.
+- Per moment in `runs/recall/recall.npz` (row in moments.npz, frames since last in view). Not yet done: `gray/score.py`
+  split by these rows, which says how much worse head-v5 and head-v8 are when the target is out of view.
+- head-v8 did not test memory: its V-JEPA clip is the same 2 s that head-v5 sees.
+
+### V-JEPA features of the rendered Loc_08 scene against the real recording (`gray/rendered.py`, 27 Nov, workstation)
+
+Question (owner): how far are V-JEPA features of our reconstruction from those of the real frames? 60 clips drawn at
+random from the Loc_08 recordings on the workstation, 16 frames as in `gray/vjepa.py`; for each frame the real pinhole view
+and the painted mesh scene (`scene_painted.glb`) rendered in Blender from the same recorded camera pose
+(`gray/rendered_blender.py`: the painted colours shown unlit and read as sRGB; read as linear and lit they come out
+washed). Encoded with V-JEPA 2 ViT-L exactly as for head-v8. Cosine to the real clip; in brackets with the mean over the
+real clips removed, since all clips of one home share most of the vector:
+
+| Compared with the real clip | All tokens averaged | 8 time slices | 7 x 7 grid at now |
+|---|---:|---:|---:|
+| The render along the same camera path | 0.914 (0.53) | 0.905 (0.65) | 0.822 (0.62) |
+| The real clip 1 s later | 0.973 (0.82) | 0.879 (0.52) | 0.798 (0.56) |
+| The real clip blurred (sigma 2 px) | 0.824 (0.42) | 0.832 (0.56) | 0.841 (0.69) |
+| A real clip from elsewhere in the home | 0.832 (-0.04) | 0.751 (0.04) | 0.651 (0.24) |
+| The render of elsewhere | 0.818 (-0.01) | 0.735 (0.04) | 0.641 (0.23) |
+
+A real clip finds its own render among the 60 renders in 93 % (each side centred on its own mean; chance 1.7 %).
+
+- For the two inputs the head-path model is given (time slices, grid) the render is as near to the real clip as the
+  real clip one second later, and far from "elsewhere". The render keeps where things are; it loses about as much as a
+  second of movement does.
+- This is much closer than DINOv3 was on the same scene (19 Nov, class token: render 0.45, next second 0.80, elsewhere
+  0.34; other poses and another renderer, so not the same test). V-JEPA is less sensitive to the missing detail,
+  as intended by its training; blurring the real clip costs it about as much as rendering does.
+- What the renders lack (sheet.png): the ceiling (black), people and hands, small objects, the real light; they are
+  brighter, and walls carry blotches from the painting.
+- Limits: 60 clips, one home, and a home whose recordings the scene was painted from. Cosines say the features are near,
+  not that a model trained on real features behaves the same on rendered ones; that needs head-v8 run on rendered
+  clips (same moments, paths compared), which is the next test if the simulation is to use V-JEPA.
+

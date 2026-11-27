@@ -70,6 +70,14 @@ comparisons, UniEgoMotion matters most (a released model); EgoPriMo is not taken
 - [ ] Both encoders together: DINOv3 grid at now plus V-JEPA history (and/or V-JEPA grid as extra tokens).
 - [ ] V-JEPA as the comparator's target space (features meant to be predictable; fewer false alarms from texture?).
 
+- [x] **How many moments need memory** (`gray/recall.py`, 27 Nov): in 46 % of held-out going moments the place gone to was
+  last in view before the 2 s given (about 1,900 moments); 54 with a named object.
+- [ ] `gray/score.py` split by `runs/recall/recall.npz`: head-v5 and head-v8 on moments whose target is out of view.
+- [ ] A memory to test on those moments: grids of earlier keyframes with their poses, or longer V-JEPA clips.
+- [x] **V-JEPA on the rendered Loc_08 scene** (`gray/rendered.py`, 27 Nov, 60 clips): the render is as near to the real
+  clip as the real clip 1 s later (grid 0.82 against 0.80; elsewhere 0.65); 93 % of clips find their own render.
+- [ ] head-v8 on rendered clips against real ones, same moments: do the planned paths stay the same?
+
 ## Decided
 
 - EgoPriMo: not taken further (no sampling with our settings, no retraining); user, 25 Nov.
