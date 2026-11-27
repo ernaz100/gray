@@ -1,6 +1,6 @@
 # Gray: where the project stands
 
-As of 25 November 2026, evening. The short version of the results. `HANDOFF.md` says how to work
+As of 27 November 2026. The short version of the results. `HANDOFF.md` says how to work
 on the project; `DESIGN.md` has every experiment with its reasoning, in order; `BACKLOG.md` what
 is open.
 
@@ -90,6 +90,19 @@ chain trained on its training data (`ee-head-v1`, `ee-motion-v1`). `gray/versus_
   distance rewards not moving, so travel is reported next to it.
 - One saved sample of UniEgoMotion per task; ours varies by 0.3 cm over three seeds.
 - Videos on a plain floor: its body often stays where it starts; ours walks, often the wrong way.
+
+**In the paper's protocol** (27 Nov; `gray/as_uem.py`, the v2 models of `gray/flex.py` with a noise level per frame,
+all 4,405 clips, UniEgoMotion's own metric script, 22 body joints; the released model gives the paper's numbers here):
+
+| Task, scored over | UniEgoMotion | Ours (`ee-head-v2`, `ee-motion-v2`) |
+|---|---:|---:|
+| Reconstruction, whole clip | 10.0 cm | 10.4 cm |
+| Generation, 0 to 2 s | 22.5 cm | 21.8 cm |
+| Forecasting, 2 to 4 s | 20.5 cm | 19.6 cm |
+
+After aligning the pose: 5.3 / 7.0 / 7.0 against 6.1 / 7.3 / 7.1 cm. Ours has the average body shape and no hands; the
+recorded body through our decoder alone scores 3.7 cm. Foot slide in their measure is three times theirs, already for
+the recorded body through our decoder (open). One seed.
 
 **EgoPriMo** (our reimplementation; no code was released), 1,500 held-out Nymeria moments, both
 given the frame at now and one sentence (`gray/versus_egoprimo.py`):

@@ -1752,6 +1752,36 @@ possible. Poses are anchored at the window's first frame. Windows that reach pas
 models used only segments of 5.1 s or more). 60,000 steps each, as 3 jobs of 1 h. Hands and body shape are left as they are.
 Not yet written: the scoring in the paper's protocol.
 
+### The v2 chain in the paper's protocol (27 Nov, `gray/as_uem.py`, on the workstation)
+
+`gray/as_uem.py write` runs `ee-head-v2` and `ee-motion-v2` on all 4,405 validation clips with what each task gives and
+writes UniEgoMotion's prediction files (SMPL-X parameters at 10 per second, average shape, flat hands, in the clip's
+frame); UniEgoMotion's `eval/compute_3d_metrics.py` scores them, `as_uem table` prints the paper's rows. For the 47
+clips from segments of 2.1 to 3 s the validation split was converted again with the limit at 2.1 s (5,236 segments;
+only on the workstation, Viper's copy is the older one). One sample per clip, 20 steps, full noise, seed 0.
+
+The paper's "MPJPE" is `mpjpe_body` (22 body joints). With that column the released model gives the paper's numbers
+here (10.0 / 22.5 / 20.5 cm against 10.0 / 22.6 / 20.6); the "1 to 2 cm behind" of 26 Nov came from the column with hands.
+
+| Task, scored over | | MPJPE | after alignment | head | foot slide |
+|---|---|---:|---:|---:|---:|
+| Reconstruction, whole clip | UniEgoMotion | 10.02 cm | 5.34 | 5.77 | 3.58 |
+| | ours | 10.42 | 6.05 | 6.24 | 11.72 |
+| Generation, 0 to 2 s | UniEgoMotion | 22.49 | 6.96 | 20.89 | 2.63 |
+| | ours | 21.82 | 7.31 | 19.64 | 11.81 |
+| Forecasting, 2 to 4 s | UniEgoMotion | 20.50 | 7.04 | 19.01 | 2.33 |
+| | ours | 19.63 | 7.07 | 17.30 | 10.18 |
+| Recorded body through our encoder and decoder | | 3.68 | 1.96 | 4.83 | 10.08 |
+
+- Generation and forecasting: ours is 0.7 and 0.9 cm ahead in position, level or slightly behind in pose.
+  Reconstruction: 0.4 cm behind, 0.7 cm in pose. Of that, the representation and the average shape alone cost
+  3.7 cm (2.0 in pose); UniEgoMotion predicts the person's shape.
+- Foot slide in their measure is about 10 for everything that went through our decoder, the recorded body included
+  (recorded: 4.4), so it is the representation or the export (average leg lengths, 10 from 30 frames per second),
+  not the models. Not looked into. Floor penetration likewise 0.010 against 0.001.
+- The camera path of ours maps back to 0.08 cm in reconstruction, which checks the change of frame.
+- One seed; standing still was not scored in this protocol; the semantic measures (TMR) were not run.
+
 ### head-v8: V-JEPA 2 in place of DINOv3 (26 Nov, extraction job 13732401, training 13738379, scored by 13743719 and 13743720)
 
 Question (owner): can a video encoder replace both DINOv3 inputs, so that the 2 s of history are
