@@ -30,9 +30,7 @@ from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
-import torch
 
-from gray import frames
 from gray.features import CACHE
 from gray.layout import CELL, Layout
 from gray.moments import FUTURE, HISTORY
@@ -46,9 +44,17 @@ BINS = (("in view at now", 0, 0), ("not now, within the 2 s given", 1, HISTORY -
         ("30 to 60 s before", 451, 900), ("longer ago", 901, 10**9), ("never before now", -1, -1))
 
 
+def axes(six: np.ndarray) -> np.ndarray:
+    """gray.frames.matrix in numpy (the workers are forked; torch in them can hang): (N, 6) -> (N, 3, 3)."""
+    first = six[:, :3] / np.linalg.norm(six[:, :3], axis=1, keepdims=True)
+    second = six[:, 3:] - (first * six[:, 3:]).sum(1, keepdims=True) * first
+    second /= np.linalg.norm(second, axis=1, keepdims=True)
+    return np.stack([first, second, np.cross(first, second)], axis=1)
+
+
 def last_seen(pose: np.ndarray, floor: np.ndarray, valid: np.ndarray, now: int, target: np.ndarray, far: float, layout: Layout | None) -> int:
     """Frames between now and the last frame up to now that has the ground point ``target`` (x, height, z) in view; -1 if none."""
-    rotation = frames.matrix(torch.from_numpy(pose[: now + 1, 3:])).numpy()  # columns: the camera's axes in the ground frame; the third is the view direction
+    rotation = axes(pose[: now + 1, 3:])  # columns: the camera's axes in the ground frame; the third is the view direction
     offset = target[None] - pose[: now + 1, :3]
     along = (offset * rotation[:, :, 2]).sum(1)
     edge = np.tan(np.radians(VIEW / 2)) * along
@@ -119,7 +125,12 @@ def main() -> None:
     names = [n for n in sorted(by_name) if (args.tracks / f"{n}.npz").exists() and (args.cache / n / "sentences.json").exists()][: args.limit]
     jobs = [(n, by_name[n], listing["now"][by_name[n]].tolist(), listing["sentence"][by_name[n]].tolist(), str(args.tracks), str(args.maps), str(args.cache), args.far) for n in names]
     with Pool(args.workers) as pool:
-        found = np.array([r for part in pool.imap(one, jobs, chunksize=2) for r in part], dtype=np.int64)
+        parts = []
+        for i, part in enumerate(pool.imap_unordered(one, jobs)):
+            parts.append(part)
+            if (i + 1) % 100 == 0:
+                print(f"  {i + 1} of {len(jobs)} recordings", flush=True)
+        found = np.array([r for part in parts for r in part], dtype=np.int64)
     row, end, thing = found[:, 0], found[:, 1], found[:, 2]
     args.out.mkdir(parents=True, exist_ok=True)
     np.savez(args.out / "recall.npz", row=row, end_ago=end, object_ago=thing)
