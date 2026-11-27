@@ -1782,6 +1782,31 @@ here (10.0 / 22.5 / 20.5 cm against 10.0 / 22.6 / 20.6); the "1 to 2 cm behind" 
 - The camera path of ours maps back to 0.08 cm in reconstruction, which checks the change of frame.
 - One seed; standing still was not scored in this protocol; the semantic measures (TMR) were not run.
 
+### Why the foot slide is high in their measure (27 Nov)
+
+Their slide counts a foot's horizontal motion while its ankle is below 8 cm or its toe below 4 cm, weighted more the
+lower it is; a standing ankle joint is at about 9 cm, so 1 cm of height changes it by about 1.5. On 294 clips:
+recorded 4.2; recorded with the average shape, hung from the same pelvis, 7.6 (feet 1 cm lower); through our decoder
+with the person's shape 6.5; through our decoder with the average shape (what was exported) 10.1; our reconstruction
+11.7; UniEgoMotion 4.0. The frozen autoencoder gives the pelvis back 1.1 cm lower than it was given (300 training
+segments; 1.4 cm on validation, 10 to 90 %: -3.6 to +0.5). So the exported body stands about 2 cm low, half from the
+shape and half from the autoencoder; the models add about 1.5. Ankles move 23.7 mm per frame in ours, 21.2 recorded,
+17.9 in UniEgoMotion's (which is smoother than the recording: acceleration 10 against 16 mm).
+
+`--ankles` sets the height per clip by the decoded ankle positions plus 1.1 cm. All 4,405 clips:
+
+| | MPJPE recon / gen / fore | foot slide |
+|---|---:|---:|
+| UniEgoMotion | 10.0 / 22.5 / 20.5 cm | 3.6 / 2.6 / 2.3 |
+| ours, height from the pelvis | 10.4 / 21.8 / 19.6 | 11.7 / 11.8 / 10.2 |
+| ours, height from the ankles | 11.6 / 22.8 / 20.4 | 3.6 / 3.7 / 3.1 |
+
+It brings the slide to the recorded level (4.4) but raises the body by more than the 2 cm (the recorded body through
+the decoder goes from 3.7 to 5.7 cm MPJPE, its head from 4.8 to 8.3), so position gets worse: the decoded joint
+positions and rotations do not agree on the height. With an average body one of the two is off; UniEgoMotion
+predicts the shape. The pelvis version stays the default. Open: predict the shape, or carry the pelvis height
+outside the latent.
+
 ### head-v8: V-JEPA 2 in place of DINOv3 (26 Nov, extraction job 13732401, training 13738379, scored by 13743719 and 13743720)
 
 Question (owner): can a video encoder replace both DINOv3 inputs, so that the 2 s of history are

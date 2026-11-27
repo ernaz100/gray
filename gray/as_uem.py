@@ -20,6 +20,10 @@ as UniEgoMotion's ``save_uem_preds.py`` does: per clip the SMPL-X parameters and
 
     body      our decoder's joint rotations are SMPL-X's (gray/ee4d.py made the latents from them), so they are written
               as they are; the pelvis is put where ours is. Shape: the average one (betas 0). Hands: flat.
+    height    with ``--ankles`` the average body is then raised or lowered as a whole, once per clip, until its
+              ankles are as high as the decoder's own joint positions have them (median over the clip), plus ``LOW``.
+              Their foot slide counts a foot as down by its height, and the average body hung from the right pelvis
+              stands about 2 cm low. It brings the slide to the recorded level and costs 1 to 2 cm of MPJPE (DESIGN.md)
     frames    ours are 15 per second, decoded at 30; a clip's frame k is our decoded frame 3 k
     place     our frame is anchored at the window's first camera pose, which the clip also has: that gives the turn
               and the shift between the two
@@ -47,6 +51,7 @@ from gray.joint import to_device
 from gray.moments import collate
 
 OPENING = {"gen": 1, "fore": int(flex.SECONDS_GIVEN * flex.RATE)}  # frames of ours a task gives; reconstruction gives all
+LOW = 0.011  # m: the frozen autoencoder gives the pelvis back this much lower than it was given (300 training segments, 27 Nov)
 SCORED = {"recon": "", "gen": "_seg_0", "fore": "_seg_20"}  # the stretch of a clip the paper scores, as their script names it
 
 
@@ -70,7 +75,9 @@ def write(args) -> None:
     planner, head_stats, _config = flex.load(args.head_run, device)
     model, body_stats, _config = flex.load(args.body_run, device)
     decoder = Decoder(device)
-    rest_pelvis = smplx.SMPLXLayer(str(args.uem / "smplx"), gender="NEUTRAL", use_pca=True, num_pca_comps=12)().joints[0, 0].double()  # of the average shape
+    layer = smplx.SMPLXLayer(str(args.uem / "smplx"), gender="NEUTRAL", use_pca=True, num_pca_comps=12)
+    rest_pelvis = layer().joints[0, 0].double()  # of the average shape
+    ankles = [7, 8]
     generator = torch.Generator(device=device).manual_seed(args.seed)
 
     def in_clip_frame(body: torch.Tensor, head: torch.Tensor, exists: torch.Tensor, some: list[str]) -> dict:
@@ -99,6 +106,11 @@ def write(args) -> None:
             flat = torch.eye(3).expand(n, 15, 3, 3)
             params = {"global_orient": turn @ orient[b, at], "body_pose": turns[b, at, 1:], "betas": torch.zeros(n, 10), "left_hand_pose": flat,
                       "right_hand_pose": flat, "transl": pelvis[b, at] @ turn.T + shift - rest_pelvis}
+            if args.ankles:
+                given = {name: params[name].float() for name in ("global_orient", "body_pose", "betas", "transl")}
+                decoded_ankles = (decoded["joints"][b, at][:, ankles].double() @ about_up[b].T + torch.stack([begin[b, 0], zero[b], begin[b, 1]])) @ turn.T + shift
+                with torch.no_grad():
+                    params["transl"][:, 2] += (decoded_ankles[..., 2] - layer(**given).joints[:, ankles, 2]).median() + LOW  # the clip's frame has z up
             token = 1.5 * torch.arange(n)  # head poses are 15 per second: every other frame of the clip lies between two
             low, high = token.floor().long().clamp(max=last), token.ceil().long().clamp(max=last)
             between = (head[b, low] + head[b, high]) / 2
@@ -159,6 +171,7 @@ def main() -> None:
     w.add_argument("--out", type=Path, required=True)
     w.add_argument("--tasks", nargs="+", default=list(SCORED), choices=tuple(SCORED))
     w.add_argument("--codec", action="store_true", help="also the recorded body through our encoder and decoder")
+    w.add_argument("--ankles", action="store_true", help="set the body's height by the decoded ankles instead of the decoded pelvis")
     w.add_argument("--steps", type=int, default=20)
     w.add_argument("--head-noise", type=float, default=1.0, help="starting noise of the head path (1: a full sample)")
     w.add_argument("--body-noise", type=float, default=1.0)
