@@ -98,7 +98,7 @@ def convert(args) -> None:
     names, start, total, agree = [], [0], 0, []
     for i, (name, seg) in enumerate(list(segments.items())[: args.limit]):
         take, first, _last = name.split("___")
-        if take not in views or seg["num_frames"] < 30:
+        if take not in views or seg["num_frames"] < 21:  # 2.1 s, the shortest clip UniEgoMotion scores (the training split was converted with 30)
             continue
         floor = float(seg["floor_height"])
         params = seg["smpl_params"]
